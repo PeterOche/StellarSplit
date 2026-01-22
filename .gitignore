@@ -1,34 +1,59 @@
-# Logs
-logs
-*.log
-npm-debug.log*
-
+# ========================
 # Dependencies
+# ========================
 node_modules/
-package-lock.json
-yarn.lock
+backend/node_modules/
 
-# Environment
+# ========================
+# Environment variables
+# ========================
 .env
 .env.local
 .env.*.local
 
-# Build
+# ========================
+# Build output
+# ========================
 dist/
 build/
 out/
+backend/dist/
+backend/build/
 
-# IDE
+# ========================
+# Logs
+# ========================
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+logs/
+
+# ========================
+# Coverage
+# ========================
+coverage/
+backend/coverage/
+.nyc_output/
+
+# ========================
+# Editor / IDE
+# ========================
 .vscode/
 .idea/
 *.swp
 *.swo
 *.swn
-.DS_Store
 
-# OS
+# ========================
+# OS files
+# ========================
+.DS_Store
 Thumbs.db
 
-# Testing
-coverage/
-.nyc_output/
+# ========================
+# Wallet keys / secrets
+# ========================
+*.pem
+*.key
+*.crt
