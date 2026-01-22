@@ -18,6 +18,9 @@ async function bootstrap() {
     }),
   );
 
+  // Set global API prefix
+  app.setGlobalPrefix('api');
+
   // Enable CORS
   app.enableCors({
     origin: true,
@@ -32,6 +35,7 @@ async function bootstrap() {
     .setVersion(appConfig.swagger.version)
     .addBearerAuth()
     .addTag('Health', 'Application health checks')
+    .addTag('Receipts', 'OCR receipt scanning and parsing')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
