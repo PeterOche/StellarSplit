@@ -41,6 +41,10 @@ const pwaOptions: Partial<VitePWAOptions> = {
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), VitePWA(pwaOptions), tailwindcss()],
+  define: {
+    // Some wallet-kit dependencies expect a Node-like `global` in the browser
+    global: 'globalThis',
+  },
   // @ts-ignore
   test: {
     globals: true,

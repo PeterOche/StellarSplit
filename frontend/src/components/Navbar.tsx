@@ -1,5 +1,6 @@
 import { NavLink } from "react-router";
 import { ROUTES } from "../constants/routes";
+import { WalletButton } from "./wallet-button";
 
 export default function Navbar() {
   return (
@@ -16,6 +17,9 @@ export default function Navbar() {
         ))}
       </div>
       <NavLink to="/">GitHub</NavLink>
+      <div className="flex gap-1">
+        <WalletButton>Connect Wallet</WalletButton>
+      </div>
     </nav>
   );
 }
