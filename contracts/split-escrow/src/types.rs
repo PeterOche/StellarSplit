@@ -6,9 +6,7 @@
 //! This module includes both the original types and the enhanced escrow
 //! types as specified in issue #59.
 
-use soroban_sdk::{contracttype, Address, Env, String, Vec};
-
-use soroban_sdk::{contracterror, contracttype, Address, String, Vec};
+use soroban_sdk::{contracterror, contracttype, Address, Env, String, Vec};
 // ============================================
 // Original Types (preserved for compatibility)
 // ============================================
