@@ -27,6 +27,9 @@ pub enum DataKey {
     /// A split record, indexed by ID
     Split(u64),
 
+    /// The token contract address used for escrow
+    Token,
+
     /// Whether the contract is initialized
     Initialized,
 }
@@ -85,6 +88,33 @@ pub fn set_admin(env: &Env, admin: &Address) {
     env.storage().persistent().set(&DataKey::Admin, admin);
     env.storage().persistent().extend_ttl(
         &DataKey::Admin,
+        LEDGER_TTL_THRESHOLD,
+        LEDGER_TTL_PERSISTENT,
+    );
+}
+
+// ============================================
+// Token Storage Functions
+// ============================================
+
+/// Check if the token has been set
+pub fn has_token(env: &Env) -> bool {
+    env.storage().persistent().has(&DataKey::Token)
+}
+
+/// Get the token contract address
+pub fn get_token(env: &Env) -> Address {
+    env.storage()
+        .persistent()
+        .get(&DataKey::Token)
+        .expect("Token not set")
+}
+
+/// Set the token contract address
+pub fn set_token(env: &Env, token: &Address) {
+    env.storage().persistent().set(&DataKey::Token, token);
+    env.storage().persistent().extend_ttl(
+        &DataKey::Token,
         LEDGER_TTL_THRESHOLD,
         LEDGER_TTL_PERSISTENT,
     );

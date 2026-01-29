@@ -11,7 +11,7 @@
 
 #![no_std]
 
-use soroban_sdk::{contract, contractimpl, Address, Env, String, Vec};
+use soroban_sdk::{contract, contractimpl, token, Address, Env, String, Vec};
 
 mod events;
 mod storage;
@@ -38,7 +38,7 @@ impl SplitEscrowContract {
     ///
     /// I'm making this the first function to call after deployment.
     /// It sets up the contract administrator who can manage global settings.
-    pub fn initialize(env: Env, admin: Address) {
+    pub fn initialize(env: Env, admin: Address, token: Address) {
         // Ensure the contract hasn't been initialized already
         if storage::has_admin(&env) {
             panic!("Contract already initialized");
@@ -49,6 +49,9 @@ impl SplitEscrowContract {
 
         // Store the admin address
         storage::set_admin(&env, &admin);
+
+        // Store the token address
+        storage::set_token(&env, &token);
 
         // Emit initialization event
         events::emit_initialized(&env, &admin);
@@ -109,6 +112,7 @@ impl SplitEscrowContract {
             description,
             total_amount,
             amount_collected: 0,
+            amount_released: 0,
             participants,
             status: SplitStatus::Pending,
             created_at: env.ledger().timestamp(),
@@ -132,6 +136,10 @@ impl SplitEscrowContract {
 
         // Get the split
         let mut split = storage::get_split(&env, split_id);
+
+        if amount <= 0 {
+            panic!("Deposit amount must be positive");
+        }
 
         // Verify the split is still accepting deposits
         if split.status != SplitStatus::Pending && split.status != SplitStatus::Active {
@@ -161,14 +169,18 @@ impl SplitEscrowContract {
             panic!("Participant not found in split");
         }
 
+        // Transfer tokens from participant to escrow contract
+        let token_address = storage::get_token(&env);
+        let token_client = token::Client::new(&env, &token_address);
+        let contract_address = env.current_contract_address();
+        token_client.transfer(&participant, &contract_address, &amount);
+
         // Update split state
         split.participants = updated_participants;
         split.amount_collected += amount;
 
         // Check if split is now fully funded
-        if split.amount_collected >= split.total_amount {
-            split.status = SplitStatus::Completed;
-        } else if split.status == SplitStatus::Pending {
+        if split.status == SplitStatus::Pending {
             split.status = SplitStatus::Active;
         }
 
@@ -177,27 +189,77 @@ impl SplitEscrowContract {
 
         // Emit deposit event
         events::emit_deposit_received(&env, split_id, &participant, amount);
+
+        // Auto-release funds if fully funded
+        if Self::is_fully_funded_internal(&split) {
+            let _ = Self::release_funds_internal(&env, split_id, split);
+        }
     }
 
     /// Release funds from a completed split to the creator
     ///
     /// I'm restricting this to completed splits only for safety.
-    pub fn release_funds(env: Env, split_id: u64) {
-        let split = storage::get_split(&env, split_id);
-
-        // Only the creator can release funds
-        split.creator.require_auth();
-
-        // Verify the split is completed
-        if split.status != SplitStatus::Completed {
-            panic!("Split is not completed");
+    pub fn release_funds(env: Env, split_id: u64) -> Result<(), Error> {
+        if !storage::has_split(&env, split_id) {
+            return Err(Error::SplitNotFound);
         }
 
-        // TODO: Implement actual token transfer in subsequent issue
-        // For now, just emit the event
+        let split = storage::get_split(&env, split_id);
+        Self::release_funds_internal(&env, split_id, split).map(|_| ())
+    }
 
-        // Emit release event
-        events::emit_funds_released(&env, split_id, &split.creator, split.amount_collected);
+    /// Release available funds to the creator for partial payments
+    pub fn release_partial(env: Env, split_id: u64) -> Result<i128, Error> {
+        if !storage::has_split(&env, split_id) {
+            return Err(Error::SplitNotFound);
+        }
+
+        let mut split = storage::get_split(&env, split_id);
+
+        if split.status == SplitStatus::Cancelled {
+            return Err(Error::SplitCancelled);
+        }
+
+        if split.status == SplitStatus::Released {
+            return Err(Error::SplitReleased);
+        }
+
+        if Self::is_fully_funded_internal(&split) {
+            return Err(Error::SplitFullyFunded);
+        }
+
+        let available = split.amount_collected - split.amount_released;
+        if available <= 0 {
+            return Err(Error::NoFundsAvailable);
+        }
+
+        let token_address = storage::get_token(&env);
+        let token_client = token::Client::new(&env, &token_address);
+        let contract_address = env.current_contract_address();
+        token_client.transfer(&contract_address, &split.creator, &available);
+
+        split.amount_released += available;
+        storage::set_split(&env, split_id, &split);
+
+        events::emit_funds_released(
+            &env,
+            split_id,
+            &split.creator,
+            available,
+            env.ledger().timestamp(),
+        );
+
+        Ok(available)
+    }
+
+    /// Check if a split is fully funded
+    pub fn is_fully_funded(env: Env, split_id: u64) -> Result<bool, Error> {
+        if !storage::has_split(&env, split_id) {
+            return Err(Error::SplitNotFound);
+        }
+
+        let split = storage::get_split(&env, split_id);
+        Ok(Self::is_fully_funded_internal(&split))
     }
 
     /// Cancel a split and mark for refunds
@@ -230,5 +292,63 @@ impl SplitEscrowContract {
     /// Get the contract admin
     pub fn get_admin(env: Env) -> Address {
         storage::get_admin(&env)
+    }
+
+    /// Get the token contract address
+    pub fn get_token(env: Env) -> Address {
+        storage::get_token(&env)
+    }
+}
+
+impl SplitEscrowContract {
+    fn is_fully_funded_internal(split: &Split) -> bool {
+        let mut total_paid: i128 = 0;
+        for i in 0..split.participants.len() {
+            total_paid += split.participants.get(i).unwrap().amount_paid;
+        }
+        total_paid >= split.total_amount
+    }
+
+    fn release_funds_internal(env: &Env, split_id: u64, mut split: Split) -> Result<i128, Error> {
+        if split.status == SplitStatus::Cancelled {
+            return Err(Error::SplitCancelled);
+        }
+
+        if split.status == SplitStatus::Released {
+            return Err(Error::SplitReleased);
+        }
+
+        if !Self::is_fully_funded_internal(&split) {
+            return Err(Error::SplitNotFunded);
+        }
+
+        let available = split.amount_collected - split.amount_released;
+        if available <= 0 {
+            return Err(Error::NoFundsAvailable);
+        }
+
+        if split.status != SplitStatus::Completed {
+            split.status = SplitStatus::Completed;
+            events::emit_escrow_completed(env, split_id, split.total_amount);
+        }
+
+        let token_address = storage::get_token(env);
+        let token_client = token::Client::new(env, &token_address);
+        let contract_address = env.current_contract_address();
+        token_client.transfer(&contract_address, &split.creator, &available);
+
+        split.amount_released += available;
+        split.status = SplitStatus::Released;
+        storage::set_split(env, split_id, &split);
+
+        events::emit_funds_released(
+            env,
+            split_id,
+            &split.creator,
+            available,
+            env.ledger().timestamp(),
+        );
+
+        Ok(available)
     }
 }
