@@ -6,8 +6,7 @@
 //! This module includes both the original types and the enhanced escrow
 //! types as specified in issue #59.
 
-use soroban_sdk::{contracttype, Address, Env, String, Vec};
-
+use soroban_sdk::{contracterror, contracttype, Address, Env, String, Vec};
 // ============================================
 // Original Types (preserved for compatibility)
 // ============================================
@@ -72,6 +71,9 @@ pub struct Split {
     /// Amount collected so far from participants
     pub amount_collected: i128,
 
+    /// Amount already released to the creator
+    pub amount_released: i128,
+
     /// List of participants and their share details
     pub participants: Vec<Participant>,
 
@@ -80,6 +82,20 @@ pub struct Split {
 
     /// Timestamp when the split was created
     pub created_at: u64,
+}
+
+/// Contract errors
+#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[repr(u32)]
+pub enum Error {
+    SplitNotFound = 1,
+    SplitCancelled = 2,
+    SplitReleased = 3,
+    SplitNotFunded = 4,
+    SplitFullyFunded = 5,
+    NoFundsAvailable = 6,
+    InvalidAmount = 7,
 }
 
 /// Configuration for the contract

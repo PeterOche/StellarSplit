@@ -5,25 +5,50 @@
 
 #![cfg(test)]
 
+extern crate std;
+
 use super::*;
-use soroban_sdk::{testutils::Address as _, Address, Env, String, Vec};
+use soroban_sdk::{
+    symbol_short, testutils::Address as _, testutils::Events as _, token, Address, Env, String,
+    Symbol, TryIntoVal, Vec,
+};
+use std::panic::{catch_unwind, AssertUnwindSafe};
 
 /// Helper to create a test environment and contract client
-fn setup_test() -> (Env, Address, SplitEscrowContractClient<'static>) {
+fn setup_test() -> (
+    Env,
+    Address,
+    Address,
+    SplitEscrowContractClient<'static>,
+    token::Client<'static>,
+    token::StellarAssetClient<'static>,
+) {
     let env = Env::default();
     env.mock_all_auths();
+
+    let token_admin = Address::generate(&env);
+    let token_id = env.register_stellar_asset_contract(token_admin.clone());
+    let token_client = token::Client::new(&env, &token_id);
+    let token_admin_client = token::StellarAssetClient::new(&env, &token_id);
 
     let contract_id = env.register_contract(None, SplitEscrowContract);
     let client = SplitEscrowContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
 
-    (env, admin, client)
+    (
+        env,
+        admin,
+        token_id,
+        client,
+        token_client,
+        token_admin_client,
+    )
 }
 
 /// Helper to initialize the contract
-fn initialize_contract(client: &SplitEscrowContractClient, admin: &Address) {
-    client.initialize(admin);
+fn initialize_contract(client: &SplitEscrowContractClient, admin: &Address, token: &Address) {
+    client.initialize(admin, token);
 }
 
 // ============================================
@@ -32,9 +57,9 @@ fn initialize_contract(client: &SplitEscrowContractClient, admin: &Address) {
 
 #[test]
 fn test_initialize() {
-    let (_env, admin, client) = setup_test();
+    let (_env, admin, token_id, client, _token_client, _token_admin_client) = setup_test();
 
-    initialize_contract(&client, &admin);
+    initialize_contract(&client, &admin, &token_id);
 
     let stored_admin = client.get_admin();
     assert_eq!(stored_admin, admin);
@@ -43,11 +68,11 @@ fn test_initialize() {
 #[test]
 #[should_panic(expected = "Contract already initialized")]
 fn test_double_initialize_fails() {
-    let (_env, admin, client) = setup_test();
+    let (_env, admin, token_id, client, _token_client, _token_admin_client) = setup_test();
 
-    initialize_contract(&client, &admin);
+    initialize_contract(&client, &admin, &token_id);
     // Second initialization should fail
-    initialize_contract(&client, &admin);
+    initialize_contract(&client, &admin, &token_id);
 }
 
 // ============================================
@@ -56,8 +81,8 @@ fn test_double_initialize_fails() {
 
 #[test]
 fn test_create_split() {
-    let (env, admin, client) = setup_test();
-    initialize_contract(&client, &admin);
+    let (env, admin, token_id, client, _token_client, _token_admin_client) = setup_test();
+    initialize_contract(&client, &admin, &token_id);
 
     let creator = Address::generate(&env);
     let participant1 = Address::generate(&env);
@@ -89,8 +114,8 @@ fn test_create_split() {
 #[test]
 #[should_panic(expected = "Participant shares must sum to total amount")]
 fn test_create_split_invalid_shares() {
-    let (env, admin, client) = setup_test();
-    initialize_contract(&client, &admin);
+    let (env, admin, token_id, client, _token_client, _token_admin_client) = setup_test();
+    initialize_contract(&client, &admin, &token_id);
 
     let creator = Address::generate(&env);
     let participant = Address::generate(&env);
@@ -111,8 +136,8 @@ fn test_create_split_invalid_shares() {
 #[test]
 #[should_panic(expected = "At least one participant is required")]
 fn test_create_split_no_participants() {
-    let (env, admin, client) = setup_test();
-    initialize_contract(&client, &admin);
+    let (env, admin, token_id, client, _token_client, _token_admin_client) = setup_test();
+    initialize_contract(&client, &admin, &token_id);
 
     let creator = Address::generate(&env);
     let description = String::from_str(&env, "Empty split");
@@ -129,8 +154,8 @@ fn test_create_split_no_participants() {
 
 #[test]
 fn test_deposit() {
-    let (env, admin, client) = setup_test();
-    initialize_contract(&client, &admin);
+    let (env, admin, token_id, client, token_client, token_admin_client) = setup_test();
+    initialize_contract(&client, &admin, &token_id);
 
     let creator = Address::generate(&env);
     let participant = Address::generate(&env);
@@ -146,6 +171,8 @@ fn test_deposit() {
 
     let split_id = client.create_split(&creator, &description, &total_amount, &addresses, &shares);
 
+    token_admin_client.mint(&participant, &100_0000000i128);
+
     // Make a deposit
     client.deposit(&split_id, &participant, &50_0000000);
 
@@ -157,15 +184,18 @@ fn test_deposit() {
     client.deposit(&split_id, &participant, &50_0000000);
 
     let split = client.get_split(&split_id);
-    assert_eq!(split.status, SplitStatus::Completed);
+    assert_eq!(split.status, SplitStatus::Released);
     assert_eq!(split.amount_collected, 100_0000000);
+    assert_eq!(split.amount_released, 100_0000000);
+
+    let creator_balance = token_client.balance(&creator);
+    assert_eq!(creator_balance, 100_0000000);
 }
 
 #[test]
-#[should_panic(expected = "Deposit exceeds remaining amount owed")]
 fn test_deposit_exceeds_share() {
-    let (env, admin, client) = setup_test();
-    initialize_contract(&client, &admin);
+    let (env, admin, token_id, client, _token_client, token_admin_client) = setup_test();
+    initialize_contract(&client, &admin, &token_id);
 
     let creator = Address::generate(&env);
     let participant = Address::generate(&env);
@@ -180,8 +210,13 @@ fn test_deposit_exceeds_share() {
 
     let split_id = client.create_split(&creator, &description, &100_0000000, &addresses, &shares);
 
+    token_admin_client.mint(&participant, &200_0000000i128);
+
     // Try to overpay
-    client.deposit(&split_id, &participant, &150_0000000);
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        client.deposit(&split_id, &participant, &150_0000000)
+    }));
+    assert!(result.is_err());
 }
 
 // ============================================
@@ -190,8 +225,8 @@ fn test_deposit_exceeds_share() {
 
 #[test]
 fn test_cancel_split() {
-    let (env, admin, client) = setup_test();
-    initialize_contract(&client, &admin);
+    let (env, admin, token_id, client, _token_client, _token_admin_client) = setup_test();
+    initialize_contract(&client, &admin, &token_id);
 
     let creator = Address::generate(&env);
     let participant = Address::generate(&env);
@@ -218,8 +253,8 @@ fn test_cancel_split() {
 
 #[test]
 fn test_release_funds() {
-    let (env, admin, client) = setup_test();
-    initialize_contract(&client, &admin);
+    let (env, admin, token_id, client, token_client, token_admin_client) = setup_test();
+    initialize_contract(&client, &admin, &token_id);
 
     let creator = Address::generate(&env);
     let participant = Address::generate(&env);
@@ -234,21 +269,25 @@ fn test_release_funds() {
 
     let split_id = client.create_split(&creator, &description, &100_0000000, &addresses, &shares);
 
-    // Complete the split
+    // Complete the split (auto-release should occur)
+    token_admin_client.mint(&participant, &100_0000000i128);
     client.deposit(&split_id, &participant, &100_0000000);
 
-    // Release funds
-    client.release_funds(&split_id);
+    let split = client.get_split(&split_id);
+    assert_eq!(split.status, SplitStatus::Released);
 
-    // Note: In a full implementation, we'd verify the token transfer
-    // For now, we just verify the function doesn't panic
+    let creator_balance = token_client.balance(&creator);
+    assert_eq!(creator_balance, 100_0000000);
+
+    // Manual release should be blocked after auto-release
+    let result = catch_unwind(AssertUnwindSafe(|| client.release_funds(&split_id)));
+    assert!(result.is_err());
 }
 
 #[test]
-#[should_panic(expected = "Split is not completed")]
 fn test_release_incomplete_split() {
-    let (env, admin, client) = setup_test();
-    initialize_contract(&client, &admin);
+    let (env, admin, token_id, client, _token_client, _token_admin_client) = setup_test();
+    initialize_contract(&client, &admin, &token_id);
 
     let creator = Address::generate(&env);
     let participant = Address::generate(&env);
@@ -264,7 +303,136 @@ fn test_release_incomplete_split() {
     let split_id = client.create_split(&creator, &description, &100_0000000, &addresses, &shares);
 
     // Try to release without completing deposits
-    client.release_funds(&split_id);
+    let result = catch_unwind(AssertUnwindSafe(|| client.release_funds(&split_id)));
+    assert!(result.is_err());
+}
+
+// ============================================
+// Partial Release and Funding Checks
+// ============================================
+
+#[test]
+fn test_is_fully_funded() {
+    let (env, admin, token_id, client, _token_client, token_admin_client) = setup_test();
+    initialize_contract(&client, &admin, &token_id);
+
+    let creator = Address::generate(&env);
+    let participant = Address::generate(&env);
+
+    let description = String::from_str(&env, "Funding check");
+
+    let mut addresses = Vec::new(&env);
+    addresses.push_back(participant.clone());
+
+    let mut shares = Vec::new(&env);
+    shares.push_back(100_0000000i128);
+
+    let split_id = client.create_split(&creator, &description, &100_0000000, &addresses, &shares);
+
+    token_admin_client.mint(&participant, &50_0000000i128);
+    client.deposit(&split_id, &participant, &50_0000000);
+
+    let funded = client.is_fully_funded(&split_id);
+    assert!(!funded);
+
+    token_admin_client.mint(&participant, &50_0000000i128);
+    client.deposit(&split_id, &participant, &50_0000000);
+
+    let funded = client.is_fully_funded(&split_id);
+    assert!(funded);
+}
+
+#[test]
+fn test_release_partial() {
+    let (env, admin, token_id, client, token_client, token_admin_client) = setup_test();
+    initialize_contract(&client, &admin, &token_id);
+
+    let creator = Address::generate(&env);
+    let participant = Address::generate(&env);
+
+    let description = String::from_str(&env, "Partial release");
+
+    let mut addresses = Vec::new(&env);
+    addresses.push_back(participant.clone());
+
+    let mut shares = Vec::new(&env);
+    shares.push_back(100_0000000i128);
+
+    let split_id = client.create_split(&creator, &description, &100_0000000, &addresses, &shares);
+
+    token_admin_client.mint(&participant, &60_0000000i128);
+    client.deposit(&split_id, &participant, &60_0000000);
+
+    let released = client.release_partial(&split_id);
+    assert_eq!(released, 60_0000000);
+
+    let split = client.get_split(&split_id);
+    assert_eq!(split.status, SplitStatus::Active);
+    assert_eq!(split.amount_released, 60_0000000);
+
+    let creator_balance = token_client.balance(&creator);
+    assert_eq!(creator_balance, 60_0000000);
+
+    token_admin_client.mint(&participant, &40_0000000i128);
+    client.deposit(&split_id, &participant, &40_0000000);
+
+    let split = client.get_split(&split_id);
+    assert_eq!(split.status, SplitStatus::Released);
+    assert_eq!(split.amount_released, 100_0000000);
+}
+
+// ============================================
+// Event Emission Tests
+// ============================================
+
+#[test]
+fn test_events_emitted_on_auto_release() {
+    let (env, admin, token_id, client, _token_client, token_admin_client) = setup_test();
+    initialize_contract(&client, &admin, &token_id);
+
+    let creator = Address::generate(&env);
+    let participant = Address::generate(&env);
+
+    let description = String::from_str(&env, "Event check");
+
+    let mut addresses = Vec::new(&env);
+    addresses.push_back(participant.clone());
+
+    let mut shares = Vec::new(&env);
+    shares.push_back(100_0000000i128);
+
+    let split_id = client.create_split(&creator, &description, &100_0000000, &addresses, &shares);
+
+    token_admin_client.mint(&participant, &100_0000000i128);
+    client.deposit(&split_id, &participant, &100_0000000);
+
+    let events = env.events().all();
+    let mut has_completed = false;
+    let mut has_released = false;
+
+    for i in 0..events.len() {
+        let event = events.get(i).unwrap();
+        let topics = &event.1;
+        let data = &event.2;
+
+        let topic: Symbol = topics.get(0).unwrap().try_into_val(&env).unwrap();
+        if topic == symbol_short!("completed") {
+            let payload: (u64, i128) = data.try_into_val(&env).unwrap();
+            assert_eq!(payload.0, split_id);
+            assert_eq!(payload.1, 100_0000000);
+            has_completed = true;
+        }
+        if topic == symbol_short!("released") {
+            let payload: (u64, Address, i128, u64) = data.try_into_val(&env).unwrap();
+            assert_eq!(payload.0, split_id);
+            assert_eq!(payload.1, creator);
+            assert_eq!(payload.2, 100_0000000);
+            has_released = true;
+        }
+    }
+
+    assert!(has_completed);
+    assert!(has_released);
 }
 
 // ============================================

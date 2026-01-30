@@ -40,11 +40,23 @@ pub fn emit_deposit_received(env: &Env, split_id: u64, participant: &Address, am
 ///
 /// I'm including the total amount released for reconciliation
 /// with the backend's payment records.
-pub fn emit_funds_released(env: &Env, split_id: u64, recipient: &Address, amount: i128) {
+pub fn emit_funds_released(
+    env: &Env,
+    split_id: u64,
+    recipient: &Address,
+    amount: i128,
+    timestamp: u64,
+) {
     env.events().publish(
         (symbol_short!("released"),),
-        (split_id, recipient.clone(), amount),
+        (split_id, recipient.clone(), amount, timestamp),
     );
+}
+
+/// Emit when escrow is completed (fully funded)
+pub fn emit_escrow_completed(env: &Env, split_id: u64, total_amount: i128) {
+    env.events()
+        .publish((symbol_short!("completed"),), (split_id, total_amount));
 }
 
 /// Emit when a split is cancelled
