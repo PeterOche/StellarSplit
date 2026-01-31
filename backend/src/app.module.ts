@@ -19,6 +19,7 @@ import { SplitHistoryModule } from "./split-history/split-history.module";
 import { ActivitiesModule } from "./modules/activities/activities.module";
 import { SearchModule } from "./search/search.module";
 import { AnalyticsModule } from "./analytics/analytics.module";
+import { ExportModule } from './export/export.module';
 import { WebhooksModule } from "./webhooks/webhooks.module";
 // Load environment variables
 dotenv.config({
@@ -72,6 +73,7 @@ dotenv.config({
     SearchModule,
     // Analytics module for user spending & reports
     AnalyticsModule,
+    ExportModule,
     // Webhooks module for external event notifications
     WebhooksModule,
   ],

@@ -1,0 +1,394 @@
+import {
+  Controller,
+  Post,
+  Get,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+  Request,
+  HttpCode,
+  HttpStatus,
+  Delete,
+  Res,
+  BadRequestException,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiQuery,
+  ApiParam,
+} from '@nestjs/swagger';
+import { Response } from 'express';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { ExportService } from './export.service';
+import {
+  CreateExportDto,
+  ScheduleExportDto,
+  CreateExportTemplateDto,
+  ExportFilterDto,
+} from './dto/export-request.dto';
+import { ExportJob, ExportFormat, ReportType } from './entities/export-job.entity';
+import { ExportTemplate } from './entities/export-template.entity';
+
+@ApiTags('Export & Reporting')
+@Controller('export')
+@UseGuards(JwtAuthGuard)
+@ApiBearerAuth()
+export class ExportController {
+  constructor(private readonly exportService: ExportService) {}
+
+  @Post('create')
+  @ApiOperation({
+    summary: 'Create a new export',
+    description: 'Create an export job for expense data in various formats',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Export job created successfully',
+    type: ExportJob,
+  })
+  @ApiResponse({ status: 400, description: 'Invalid request parameters' })
+  @ApiResponse({ status: 403, description: 'User not authorized' })
+  async createExport(
+    @Request() req,
+    @Body() createExportDto: CreateExportDto,
+  ): Promise<ExportJob> {
+    return this.exportService.createExport(req.user.id, createExportDto);
+  }
+
+  @Get('status/:id')
+  @ApiOperation({
+    summary: 'Get export job status',
+    description: 'Get the status and details of an export job',
+  })
+  @ApiParam({ name: 'id', description: 'Export job ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Export job details',
+    type: ExportJob,
+  })
+  @ApiResponse({ status: 404, description: 'Export job not found' })
+  async getExportStatus(
+    @Request() req,
+    @Param('id') id: string,
+  ): Promise<ExportJob> {
+    return this.exportService.getExportStatus(id, req.user.id);
+  }
+
+  @Get('download/:id')
+  @ApiOperation({
+    summary: 'Download export file',
+    description: 'Download the generated export file',
+  })
+  @ApiParam({ name: 'id', description: 'Export job ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'File download',
+    content: {
+      'application/octet-stream': {
+        schema: { type: 'string', format: 'binary' },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Export not found or expired' })
+  async downloadExport(
+    @Request() req,
+    @Param('id') id: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    const { url, fileName } = await this.exportService.downloadExport(
+      id,
+      req.user.id,
+    );
+
+    // Set headers for file download
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    
+    // For local files, serve directly
+    if (url.startsWith('http://localhost') || url.startsWith('/storage')) {
+      // In production, you would redirect to the signed URL or serve the file
+      res.redirect(url);
+    } else {
+      // For S3 URLs, redirect to signed URL
+      res.redirect(url);
+    }
+  }
+
+  @Get('list')
+  @ApiOperation({
+    summary: 'List export jobs',
+    description: 'Get paginated list of user\'s export jobs',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (default: 1)',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Items per page (default: 20, max: 100)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'List of export jobs',
+    schema: {
+      type: 'object',
+      properties: {
+        jobs: { type: 'array', items: { $ref: '#/components/schemas/ExportJob' } },
+        total: { type: 'number' },
+        page: { type: 'number' },
+        totalPages: { type: 'number' },
+      },
+    },
+  })
+  async listExports(
+    @Request() req,
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 20,
+  ) {
+    return this.exportService.listExports(req.user.id, page, limit);
+  }
+
+  @Post('templates')
+  @ApiOperation({
+    summary: 'Create export template',
+    description: 'Create a reusable export template',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Template created successfully',
+    type: ExportTemplate,
+  })
+  async createTemplate(
+    @Request() req,
+    @Body() createTemplateDto: CreateExportTemplateDto,
+  ): Promise<ExportTemplate> {
+    return this.exportService.createTemplate(req.user.id, createTemplateDto);
+  }
+
+  @Get('templates')
+  @ApiOperation({
+    summary: 'List export templates',
+    description: 'Get all export templates for the user',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'List of export templates',
+    type: [ExportTemplate],
+  })
+  async listTemplates(@Request() req): Promise<ExportTemplate[]> {
+    return this.exportService.listTemplates(req.user.id);
+  }
+
+  @Delete('templates/:id')
+  @ApiOperation({
+    summary: 'Delete export template',
+    description: 'Delete a specific export template',
+  })
+  @ApiParam({ name: 'id', description: 'Template ID' })
+  @ApiResponse({ status: 200, description: 'Template deleted successfully' })
+  @ApiResponse({ status: 404, description: 'Template not found' })
+  async deleteTemplate(
+    @Request() req,
+    @Param('id') id: string,
+  ): Promise<void> {
+    return this.exportService.deleteTemplate(id, req.user.id);
+  }
+
+  @Post('schedule')
+  @ApiOperation({
+    summary: 'Schedule recurring export',
+    description: 'Schedule an export to run automatically on a schedule',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Export scheduled successfully',
+    type: ExportTemplate,
+  })
+  async scheduleExport(
+    @Request() req,
+    @Body() scheduleExportDto: ScheduleExportDto,
+  ): Promise<ExportTemplate> {
+    return this.exportService.scheduleExport(req.user.id, scheduleExportDto);
+  }
+
+  @Get('formats')
+  @ApiOperation({
+    summary: 'Get available export formats',
+    description: 'Get list of all supported export formats',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'List of export formats',
+    schema: {
+      type: 'object',
+      properties: {
+        formats: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              value: { type: 'string' },
+              label: { type: 'string' },
+              description: { type: 'string' },
+              mimeType: { type: 'string' },
+            },
+          },
+        },
+      },
+    },
+  })
+  async getExportFormats() {
+    const formats = [
+      {
+        value: ExportFormat.CSV,
+        label: 'CSV',
+        description: 'Comma-separated values, compatible with Excel',
+        mimeType: 'text/csv',
+      },
+      {
+        value: ExportFormat.PDF,
+        label: 'PDF',
+        description: 'Portable Document Format, printable report',
+        mimeType: 'application/pdf',
+      },
+      {
+        value: ExportFormat.JSON,
+        label: 'JSON',
+        description: 'JavaScript Object Notation, for API integration',
+        mimeType: 'application/json',
+      },
+      {
+        value: ExportFormat.QBO,
+        label: 'QuickBooks (QBO)',
+        description: 'QuickBooks Online format for accounting software',
+        mimeType: 'application/x-qb',
+      },
+      {
+        value: ExportFormat.OFX,
+        label: 'OFX',
+        description: 'Open Financial Exchange, banking standard',
+        mimeType: 'application/x-ofx',
+      },
+      {
+        value: ExportFormat.XLSX,
+        label: 'Excel (XLSX)',
+        description: 'Microsoft Excel format with formatting',
+        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      },
+    ];
+
+    return { formats };
+  }
+
+  @Get('report-types')
+  @ApiOperation({
+    summary: 'Get available report types',
+    description: 'Get list of all supported report types',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'List of report types',
+    schema: {
+      type: 'object',
+      properties: {
+        reportTypes: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              value: { type: 'string' },
+              label: { type: 'string' },
+              description: { type: 'string' },
+            },
+          },
+        },
+      },
+    },
+  })
+  async getReportTypes() {
+    const reportTypes = [
+      {
+        value: ReportType.MONTHLY_SUMMARY,
+        label: 'Monthly Summary',
+        description: 'Monthly breakdown of expenses and settlements',
+      },
+      {
+        value: ReportType.ANNUAL_TAX_REPORT,
+        label: 'Annual Tax Report',
+        description: 'Tax-compliant report for business expenses',
+      },
+      {
+        value: ReportType.CATEGORY_BREAKDOWN,
+        label: 'Category Breakdown',
+        description: 'Analysis of expenses by category',
+      },
+      {
+        value: ReportType.PARTNER_WISE_SUMMARY,
+        label: 'Partner-wise Summary',
+        description: 'Summary of balances with each partner',
+      },
+      {
+        value: ReportType.PAYMENT_HISTORY,
+        label: 'Payment History',
+        description: 'Chronological timeline of all transactions',
+      },
+      {
+        value: ReportType.CUSTOM,
+        label: 'Custom Report',
+        description: 'Custom filtered transaction list',
+      },
+    ];
+
+    return { reportTypes };
+  }
+
+  @Get('eligibility')
+  @ApiOperation({
+    summary: 'Check export eligibility',
+    description: 'Check if user can create an export and view limits',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Eligibility status and limits',
+  })
+  async checkEligibility(@Request() req) {
+    return this.exportService.checkEligibility(req.user.id);
+  }
+
+  @Get('stats')
+  @ApiOperation({
+    summary: 'Get export statistics',
+    description: 'Get statistics about user\'s export usage',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Export statistics',
+  })
+  async getExportStats(@Request() req) {
+    const exports = await this.exportService.listExports(req.user.id, 1, 1000);
+    
+    const stats = {
+      totalExports: exports.total,
+      completedExports: exports.jobs.filter(job => job.status === 'COMPLETED').length,
+      failedExports: exports.jobs.filter(job => job.status === 'FAILED').length,
+      pendingExports: exports.jobs.filter(job => job.status === 'PENDING' || job.status === 'PROCESSING').length,
+      formatDistribution: exports.jobs.reduce((acc, job) => {
+        acc[job.format] = (acc[job.format] || 0) + 1;
+        return acc;
+      }, {}),
+      reportTypeDistribution: exports.jobs.reduce((acc, job) => {
+        acc[job.reportType] = (acc[job.reportType] || 0) + 1;
+        return acc;
+      }, {}),
+    };
+
+    return stats;
+  }
+}
