@@ -4,6 +4,7 @@ import { SplitHeader } from '../../components/Split/SplitHeader';
 import { ParticipantList } from '../../components/Split/ParticipantList';
 import { ItemList } from '../../components/Split/ItemList';
 import { ReceiptImage } from '../../components/Receipt/ReceiptImage';
+import { ReceiptUpload } from '../../components/ReceiptUpload';
 import { PaymentButton } from '../../components/Payment/PaymentButton';
 import { PaymentModal } from '../../components/Payment/PaymentModal';
 import { ShareModal } from '../../components/Split/ShareModal';
@@ -42,6 +43,7 @@ export const SplitDetailPage = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
     const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+    const [showReceiptUpload, setShowReceiptUpload] = useState(false);
     const [isProcessingPayment, setIsProcessingPayment] = useState(false);
     const [paymentStatus, setPaymentStatus] = useState<'idle' | 'success' | 'error'>('idle');
 
@@ -170,6 +172,24 @@ export const SplitDetailPage = () => {
                 </div>
 
                 <ReceiptImage imageUrl={split.receiptUrl} />
+
+                <div className="mt-4">
+                    <button
+                        type="button"
+                        onClick={() => setShowReceiptUpload((v) => !v)}
+                        className="text-sm text-purple-600 hover:text-purple-700 font-medium"
+                    >
+                        {showReceiptUpload ? 'Hide receipt upload' : 'Upload or replace receipt'}
+                    </button>
+                    {showReceiptUpload && (
+                        <div className="mt-3 p-4 rounded-xl border border-gray-200 bg-white dark:bg-gray-800 dark:border-gray-700">
+                            <ReceiptUpload
+                                onFilesChange={(files) => console.log('Receipt files:', files.length, files)}
+                                onManualEntry={(data) => console.log('Manual entry:', data)}
+                            />
+                        </div>
+                    )}
+                </div>
 
                 <ItemList
                     items={split.items || []}
