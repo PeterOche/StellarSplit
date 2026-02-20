@@ -1,0 +1,64 @@
+{
+    "common": {
+        "backToDashboard": "Back to Dashboard",
+        "shareSplit": "Share Split",
+        "splitDetails": "Split Details",
+        "you": "You",
+        "loading": "Loading...",
+        "settledSuccessfully": "Settled Successfully!",
+        "paymentFailed": "Payment Failed. Try again.",
+        "pending": "Pending",
+        "paid": "Paid",
+        "total": "Total",
+        "date": "Date",
+        "status": "Status",
+        "receiptItems": "Receipt Items",
+        "subtotal": "Subtotal before tax & tip",
+        "securedBy": "Secured by Stellar Network",
+        "share": "Share",
+        "copy": "Copy"
+    },
+    "split": {
+        "title": "Split Title",
+        "participants": "Participants",
+        "items": "Items",
+        "amountOwed": "Amount Owed",
+        "payNow": "Pay Now",
+        "pay": "Pay",
+        "processing": "Processing...",
+        "confirmPayment": "Confirm Payment",
+        "youAreSending": "You are sending",
+        "connected": "Connected",
+        "scanToJoin": "Scan to join split",
+        "copyLink": "Copy Link",
+        "shareTitle": "Join my Stellar Split",
+        "shareText": "Help settle this expense on Stellar Split!"
+    },
+    "dashboard": {
+        "title": "Dashboard",
+        "welcome": "Welcome back! Here's your expense overview.",
+        "stats": {
+            "totalExpenses": "Total Expenses",
+            "activeGroups": "Active Groups",
+            "pendingSplits": "Pending Splits",
+            "youOwe": "You Owe"
+        },
+        "recentActivity": "Recent Activity",
+        "quickActions": "Quick Actions",
+        "actions": {
+            "addExpense": "Add Expense",
+            "createGroup": "Create Group",
+            "settleUp": "Settle Up",
+            "viewReports": "View Reports"
+        }
+    },
+    "languages": {
+        "en": "English",
+        "es": "Spanish",
+        "fr": "French",
+        "de": "German",
+        "zh": "Chinese",
+        "ja": "Japanese",
+        "pt": "Portuguese"
+    }
+}

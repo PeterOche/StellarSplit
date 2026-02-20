@@ -1,0 +1,34 @@
+{
+    "common": {
+        "backToDashboard": "Volver al Panel",
+        "shareSplit": "Compartir Cuenta",
+        "splitDetails": "Detalles de la Cuenta",
+        "you": "Tú",
+        "loading": "Cargando...",
+        "settledSuccessfully": "¡Liquidado con éxito!",
+        "paymentFailed": "Pago fallido. Inténtalo de nuevo.",
+        "pending": "Pendiente",
+        "paid": "Pagado",
+        "total": "Total",
+        "date": "Fecha",
+        "status": "Estado"
+    },
+    "split": {
+        "title": "Título de la Cuenta",
+        "participants": "Participantes",
+        "items": "Artículos",
+        "amountOwed": "Cantidad Adeudada",
+        "payNow": "Pagar Ahora",
+        "processing": "Procesando...",
+        "confirmPayment": "Confirmar Pago"
+    },
+    "languages": {
+        "en": "Inglés",
+        "es": "Español",
+        "fr": "Francés",
+        "de": "Alemán",
+        "zh": "Chino",
+        "ja": "Japonés",
+        "pt": "Portugués"
+    }
+}

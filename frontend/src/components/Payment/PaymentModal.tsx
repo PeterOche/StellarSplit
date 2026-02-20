@@ -1,4 +1,6 @@
 import { X, ShieldCheck } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { formatCurrency } from '../../utils/format';
 
 interface PaymentModalProps {
     isOpen: boolean;
@@ -10,6 +12,8 @@ interface PaymentModalProps {
 }
 
 export const PaymentModal = ({ isOpen, onClose, amount, currency, onConfirm, isProcessing }: PaymentModalProps) => {
+    const { t } = useTranslation();
+
     if (!isOpen) return null;
 
     return (
@@ -24,10 +28,10 @@ export const PaymentModal = ({ isOpen, onClose, amount, currency, onConfirm, isP
                     <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4 text-purple-600 shadow-sm">
                         <ShieldCheck size={32} />
                     </div>
-                    <h2 className="text-xl font-bold text-gray-900">Confirm Payment</h2>
-                    <p className="text-gray-500 text-sm mt-1">You are sending</p>
+                    <h2 className="text-xl font-bold text-gray-900">{t('split.confirmPayment')}</h2>
+                    <p className="text-gray-500 text-sm mt-1">{t('split.youAreSending')}</p>
                     <div className="text-4xl font-black text-gray-900 mt-2 tracking-tight">
-                        {currency === 'USD' ? '$' : currency}{amount.toFixed(2)}
+                        {formatCurrency(amount, currency)}
                     </div>
                 </div>
 
@@ -38,7 +42,7 @@ export const PaymentModal = ({ isOpen, onClose, amount, currency, onConfirm, isP
                         </div>
                         <div className="flex-1">
                             <span className="font-bold text-gray-900 text-sm block">Freighter Wallet</span>
-                            <span className="text-xs text-purple-600 font-medium">Connected • GBAN...45X</span>
+                            <span className="text-xs text-purple-600 font-medium">{t('split.connected')} • GBAN...45X</span>
                         </div>
                         <div className="flex items-center justify-center w-6 h-6 rounded-full bg-purple-600 text-white">
                             <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -56,10 +60,10 @@ export const PaymentModal = ({ isOpen, onClose, amount, currency, onConfirm, isP
                     {isProcessing ? (
                         <>
                             <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
-                            Processing...
+                            {t('split.processing')}
                         </>
                     ) : (
-                        'Confirm Payment'
+                        t('split.confirmPayment')
                     )}
                 </button>
             </div>
