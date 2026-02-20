@@ -1,0 +1,34 @@
+{
+    "common": {
+        "backToDashboard": "Voltar ao Dashboard",
+        "shareSplit": "Compartilhar Divisão",
+        "splitDetails": "Detalhes da Divisão",
+        "you": "Você",
+        "loading": "Carregando...",
+        "settledSuccessfully": "Liquidado com Sucesso!",
+        "paymentFailed": "Pagamento falhou. Tente novamente.",
+        "pending": "Pendente",
+        "paid": "Pago",
+        "total": "Total",
+        "date": "Data",
+        "status": "Status"
+    },
+    "split": {
+        "title": "Título da Divisão",
+        "participants": "Participantes",
+        "items": "Itens",
+        "amountOwed": "Valor Devido",
+        "payNow": "Pagar Agora",
+        "processing": "Processando...",
+        "confirmPayment": "Confirmar Pagamento"
+    },
+    "languages": {
+        "en": "Inglês",
+        "es": "Espanhol",
+        "fr": "Francês",
+        "de": "Alemão",
+        "zh": "Chinês",
+        "ja": "Japonês",
+        "pt": "Português"
+    }
+}

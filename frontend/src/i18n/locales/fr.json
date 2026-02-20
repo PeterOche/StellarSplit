@@ -1,0 +1,34 @@
+{
+    "common": {
+        "backToDashboard": "Retour au Tableau de Bord",
+        "shareSplit": "Partager la Note",
+        "splitDetails": "Détails de la Note",
+        "you": "Vous",
+        "loading": "Chargement...",
+        "settledSuccessfully": "Réglé avec Succès !",
+        "paymentFailed": "Échec du paiement. Réessayez.",
+        "pending": "En attente",
+        "paid": "Payé",
+        "total": "Total",
+        "date": "Date",
+        "status": "Statut"
+    },
+    "split": {
+        "title": "Titre de la Note",
+        "participants": "Participants",
+        "items": "Articles",
+        "amountOwed": "Montant Dû",
+        "payNow": "Payer Maintenant",
+        "processing": "Traitement...",
+        "confirmPayment": "Confirmer le Paiement"
+    },
+    "languages": {
+        "en": "Anglais",
+        "es": "Espagnol",
+        "fr": "Français",
+        "de": "Allemand",
+        "zh": "Chinois",
+        "ja": "Japonais",
+        "pt": "Portugais"
+    }
+}

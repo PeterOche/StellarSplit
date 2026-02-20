@@ -1,7 +1,8 @@
 import { NavLink } from "react-router";
 import { ROUTES } from "../constants/routes";
 import { WalletButton } from "./wallet-button";
-import { ThemeToggle } from "./ThemeToggle"; // 👈 add this import
+import { ThemeToggle } from "./ThemeToggle";
+import { LanguageSelector } from "./LanguageSelector";
 
 export default function Navbar() {
   return (
@@ -19,6 +20,7 @@ export default function Navbar() {
       </div>
       <NavLink to="/">GitHub</NavLink>
       <div className="flex gap-3 items-center">
+        <LanguageSelector />
         <ThemeToggle /> {/* 👈 sits next to the wallet button */}
         <WalletButton>Connect Wallet</WalletButton>
       </div>

@@ -12,6 +12,7 @@ import { LoadingSkeleton } from '../../components/Split/LoadingSkeleton';
 import { useCollaboration } from '../../hooks/useCollaboration';
 import { PresenceIndicator, LiveActivityFeed, ConflictResolver } from '../../components/Collaboration';
 import type { Split, Participant } from '../../types';
+import { useTranslation } from 'react-i18next';
 
 // Mock Data
 const MOCK_SPLIT: Split = {
@@ -36,6 +37,7 @@ const MOCK_SPLIT: Split = {
 };
 
 export const SplitDetailPage = () => {
+    const { t } = useTranslation();
     const [split, setSplit] = useState<Split>(MOCK_SPLIT);
     const [isLoading, setIsLoading] = useState(true);
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -62,7 +64,7 @@ export const SplitDetailPage = () => {
             // Join collaboration room once loaded
             joinSplit(MOCK_SPLIT.id, {
                 userId: 'user-123',
-                name: 'You',
+                name: t('common.you'),
                 activeView: 'split-details'
             });
         }, 1500);
@@ -128,7 +130,7 @@ export const SplitDetailPage = () => {
                     }`}>
                     {paymentStatus === 'success' ? <CheckCircle size={20} /> : <AlertCircle size={20} />}
                     <span className="font-bold">
-                        {paymentStatus === 'success' ? 'Settled Successfully!' : 'Payment Failed. Try again.'}
+                        {paymentStatus === 'success' ? t('common.settledSuccessfully') : t('common.paymentFailed')}
                     </span>
                 </div>
             )}
@@ -137,7 +139,7 @@ export const SplitDetailPage = () => {
                 <button className="p-2 -ml-2 text-gray-600 hover:bg-gray-100 rounded-full transition-colors">
                     <ChevronLeft size={24} />
                 </button>
-                <span className="font-bold text-gray-900">Split Details</span>
+                <span className="font-bold text-gray-900">{t('common.splitDetails')}</span>
                 <button
                     onClick={() => setIsShareModalOpen(true)}
                     className="p-2 -mr-2 text-purple-600 hover:bg-purple-50 rounded-full transition-colors"
@@ -151,13 +153,13 @@ export const SplitDetailPage = () => {
                 <div className="hidden md:flex justify-between items-center mb-8">
                     <button className="flex items-center gap-2 text-gray-600 hover:text-gray-900 font-medium transition-colors">
                         <div className="p-1 rounded-full bg-gray-100"><ChevronLeft size={20} /></div>
-                        Back to Dashboard
+                        {t('common.backToDashboard')}
                     </button>
                     <button
                         onClick={() => setIsShareModalOpen(true)}
                         className="flex items-center gap-2 text-purple-600 bg-purple-50 hover:bg-purple-100 px-4 py-2 rounded-xl font-bold transition-colors"
                     >
-                        <Share2 size={18} /> Share Split
+                        <Share2 size={18} /> {t('common.shareSplit')}
                     </button>
                 </div>
 

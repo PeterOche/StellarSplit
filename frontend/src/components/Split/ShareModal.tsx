@@ -1,4 +1,5 @@
 import { X, Copy, QrCode, Share2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 interface ShareModalProps {
     isOpen: boolean;
@@ -7,6 +8,8 @@ interface ShareModalProps {
 }
 
 export const ShareModal = ({ isOpen, onClose, splitLink }: ShareModalProps) => {
+    const { t } = useTranslation();
+
     if (!isOpen) return null;
 
     const handleCopy = async () => {
@@ -22,8 +25,8 @@ export const ShareModal = ({ isOpen, onClose, splitLink }: ShareModalProps) => {
         if (navigator.share) {
             try {
                 await navigator.share({
-                    title: 'Join my Stellar Split',
-                    text: 'Help settle this expense on Stellar Split!',
+                    title: t('split.shareTitle'),
+                    text: t('split.shareText'),
                     url: splitLink,
                 });
             } catch (err) {
@@ -42,7 +45,7 @@ export const ShareModal = ({ isOpen, onClose, splitLink }: ShareModalProps) => {
                 <div className="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mb-6 md:hidden" />
 
                 <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-xl font-bold text-gray-900">Share Split</h2>
+                    <h2 className="text-xl font-bold text-gray-900">{t('common.shareSplit')}</h2>
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-600 bg-gray-100 p-2 rounded-full transition-colors">
                         <X size={20} />
                     </button>
@@ -57,16 +60,16 @@ export const ShareModal = ({ isOpen, onClose, splitLink }: ShareModalProps) => {
                                 <span className="text-xs text-white px-2 text-center">{splitLink}</span>
                             </div>
                         </div>
-                        <span className="text-sm font-medium text-gray-500">Scan to join split</span>
+                        <span className="text-sm font-medium text-gray-500">{t('split.scanToJoin')}</span>
                     </div>
                 </div>
 
                 <div className="flex gap-3">
                     <button onClick={handleCopy} className="flex-1 bg-gray-50 hover:bg-gray-100 active:bg-gray-200 text-gray-900 font-bold py-3.5 px-4 rounded-xl transition-colors flex items-center justify-center gap-2 border border-gray-100">
-                        <Copy size={18} /> Copy Link
+                        <Copy size={18} /> {t('split.copyLink')}
                     </button>
                     <button onClick={handleShare} className="flex-1 bg-purple-600 hover:bg-purple-700 active:bg-purple-800 text-white font-bold py-3.5 px-4 rounded-xl shadow-lg shadow-purple-200 transition-colors flex items-center justify-center gap-2">
-                        <Share2 size={18} /> Share
+                        <Share2 size={18} /> {t('common.share')}
                     </button>
                 </div>
             </div>

@@ -7,6 +7,7 @@ import RootLayout from "./layouts/RootLayout";
 import { WalletProvider } from "./hooks/use-wallet";
 import { ThemeProvider } from "./components/ThemeContex";
 import { CollaborationProvider } from "./components/Collaboration";
+import "./i18n/config";
 
 const router = createBrowserRouter([
   {

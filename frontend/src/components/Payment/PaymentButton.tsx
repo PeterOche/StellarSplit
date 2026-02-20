@@ -1,4 +1,6 @@
 import { Wallet } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { formatCurrency } from '../../utils/format';
 
 interface PaymentButtonProps {
     amount: number;
@@ -8,6 +10,8 @@ interface PaymentButtonProps {
 }
 
 export const PaymentButton = ({ amount, currency, onClick, disabled }: PaymentButtonProps) => {
+    const { t } = useTranslation();
+
     return (
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/80 backdrop-blur-md border-t border-gray-100 shadow-2xl md:static md:bg-transparent md:border-0 md:shadow-none md:p-0 z-10">
             <div className="max-w-md mx-auto md:max-w-none">
@@ -20,10 +24,10 @@ export const PaymentButton = ({ amount, currency, onClick, disabled }: PaymentBu
                     <div className="bg-white/20 p-1.5 rounded-lg group-hover:bg-white/30 transition-colors">
                         <Wallet size={20} className="text-white" />
                     </div>
-                    <span className="text-lg">Pay {currency === 'USD' ? '$' : currency}{amount.toFixed(2)}</span>
+                    <span className="text-lg">{t('split.pay')} {formatCurrency(amount, currency)}</span>
                 </button>
                 <p className="text-center text-xs text-gray-400 mt-2 md:hidden">
-                    Secured by Stellar Network
+                    {t('common.securedBy')}
                 </p>
             </div>
         </div>

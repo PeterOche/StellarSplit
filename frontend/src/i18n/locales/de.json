@@ -1,0 +1,34 @@
+{
+    "common": {
+        "backToDashboard": "Zurück zum Dashboard",
+        "shareSplit": "Split teilen",
+        "splitDetails": "Split-Details",
+        "you": "Du",
+        "loading": "Laden...",
+        "settledSuccessfully": "Erfolgreich abgerechnet!",
+        "paymentFailed": "Zahlung fehlgeschlagen. Versuchen Sie es erneut.",
+        "pending": "Ausstehend",
+        "paid": "Bezahlt",
+        "total": "Gesamt",
+        "date": "Datum",
+        "status": "Status"
+    },
+    "split": {
+        "title": "Split-Titel",
+        "participants": "Teilnehmer",
+        "items": "Artikel",
+        "amountOwed": "Geschuldeter Betrag",
+        "payNow": "Jetzt bezahlen",
+        "processing": "Wird verarbeitet...",
+        "confirmPayment": "Zahlung bestätigen"
+    },
+    "languages": {
+        "en": "Englisch",
+        "es": "Spanisch",
+        "fr": "Französisch",
+        "de": "Deutsch",
+        "zh": "Chinesisch",
+        "ja": "Japanisch",
+        "pt": "Portugiesisch"
+    }
+}
