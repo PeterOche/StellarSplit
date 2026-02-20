@@ -16,7 +16,7 @@
     "@stellar/stellar-sdk": "^14.4.3",
     "axios": "^1.13.2",
     "html-to-image": "^1.11.13",
-    "i18next": "^25.8.12",
+    "i18next": "^25.8.13",
     "i18next-browser-languagedetector": "^8.2.1",
     "i18next-http-backend": "^3.0.2",
     "idb": "^8.0.3",
