@@ -23,6 +23,13 @@ export class Split {
   @Column({ type: "varchar", default: "active" })
   status!: "active" | "completed" | "partial";
 
+  /**
+   * Whether the split is frozen due to an active dispute
+   * When frozen: no new payments, withdrawals, or distributions allowed
+   */
+  @Column({ type: "boolean", default: false })
+  isFrozen!: boolean;
+
   @Column({ type: "text", nullable: true })
   description?: string;
 
