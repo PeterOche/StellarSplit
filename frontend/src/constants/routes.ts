@@ -12,7 +12,11 @@ export const ROUTES = [
     label: "Analytics",
   },
   {
-    to: "/notifications",
-    label: "Notifications",
+    to: "/history",
+    label: "History",
   },
+  {
+     to: "/notifications",
+    label: "Notifications",
+  }
 ];

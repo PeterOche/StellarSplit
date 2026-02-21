@@ -39,6 +39,15 @@ const router = createBrowserRouter([
         },
       },
       {
+        path: "/history",
+        lazy: async () => {
+          const { default: SplitHistoryPage } = await import(
+            "./pages/SplitHistoryPage"
+          );
+          return { Component: SplitHistoryPage };
+        },
+      },
+      {
         path: "/create-split",
         lazy: async () => {
           const { SplitCreationWizard } = await import(
