@@ -11,7 +11,9 @@
 
 #![no_std]
 
-use soroban_sdk::{contract, contractimpl, token, Address, Env, String, Vec};
+use soroban_sdk::{contracttype, symbol_short, Address, Env, String, Vec, token};
+use soroban_sdk::token::TokenClient;
+use std::string::ToString;
 
 mod events;
 mod storage;
@@ -298,60 +300,35 @@ impl SplitEscrowContract {
     pub fn get_token(env: Env) -> Address {
         storage::get_token(&env)
     }
-}
 
-impl SplitEscrowContract {
-    fn is_fully_funded_internal(split: &Split) -> bool {
-        let mut total_paid: i128 = 0;
-        for i in 0..split.participants.len() {
-            total_paid += split.participants.get(i).unwrap().amount_paid;
-        }
-        total_paid >= split.total_amount
+    // ============================================
+    // Insurance Query Functions
+    // ============================================
+
+    /// Get insurance policy by ID
+    pub fn get_insurance(env: Env, insurance_id: String) -> types::InsurancePolicy {
+        storage::get_insurance(&env, &insurance_id)
     }
 
-    fn release_funds_internal(env: &Env, split_id: u64, mut split: Split) -> Result<i128, Error> {
-        if split.status == SplitStatus::Cancelled {
-            return Err(Error::SplitCancelled);
-        }
-
-        if split.status == SplitStatus::Released {
-            return Err(Error::SplitReleased);
-        }
-
-        if !Self::is_fully_funded_internal(&split) {
-            return Err(Error::SplitNotFunded);
-        }
-
-        let available = split.amount_collected - split.amount_released;
-        if available <= 0 {
-            return Err(Error::NoFundsAvailable);
-        }
-
-        if split.status != SplitStatus::Completed {
-            split.status = SplitStatus::Completed;
-            events::emit_escrow_completed(env, split_id, split.total_amount);
-        }
-
-        let token_address = storage::get_token(env);
-        let token_client = token::Client::new(env, &token_address);
-        let contract_address = env.current_contract_address();
-        token_client.transfer(&contract_address, &split.creator, &available);
-
-        split.amount_released += available;
-        split.status = SplitStatus::Released;
-        storage::set_split(env, split_id, &split);
-
-        events::emit_funds_released(
-            env,
-            split_id,
-            &split.creator,
-            available,
-            env.ledger().timestamp(),
-        );
-
-        Ok(available)
+    /// Get insurance claim by ID
+    pub fn get_claim(env: Env, claim_id: String) -> types::InsuranceClaim {
+        storage::get_claim(&env, &claim_id)
     }
-}
+
+    /// Get all claims for an insurance policy
+    pub fn get_insurance_claims(env: Env, insurance_id: String) -> Vec<String> {
+        storage::get_insurance_claims(&env, &insurance_id)
+    }
+
+    /// Check if a split has insurance
+    pub fn has_split_insurance(env: Env, split_id: String) -> bool {
+        storage::has_split_insurance(&env, &split_id)
+    }
+
+    /// Get insurance ID for a split
+    pub fn get_split_insurance(env: Env, split_id: u64) -> Option<String> {
+        storage::get_split_to_insurance(&env, &split_id.to_string())
+    }
 
     /// Get a participant's status in a split
     ///
@@ -376,3 +353,4 @@ impl SplitEscrowContract {
 
         Err(Error::ParticipantNotFound)
     }
+}

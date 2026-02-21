@@ -97,6 +97,13 @@ pub enum Error {
     SplitFullyFunded = 5,
     NoFundsAvailable = 6,
     InvalidAmount = 7,
+    InsuranceNotFound = 8,
+    InsuranceAlreadyExists = 9,
+    ClaimNotFound = 10,
+    InvalidClaimStatus = 11,
+    InsufficientPremium = 12,
+    InsuranceExpired = 13,
+    ParticipantNotFound = 14,
 }
 
 /// Configuration for the contract
@@ -111,6 +118,99 @@ pub struct ContractConfig {
 
     /// Whether the contract is paused
     pub is_paused: bool,
+}
+
+// ============================================
+// Insurance Types
+// ============================================
+
+/// Status of an insurance policy
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum InsuranceStatus {
+    /// Insurance is active and providing coverage
+    Active,
+    /// Insurance has expired
+    Expired,
+    /// Insurance has been claimed and paid out
+    Claimed,
+    /// Insurance was cancelled
+    Cancelled,
+}
+
+/// Status of an insurance claim
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ClaimStatus {
+    /// Claim has been submitted and is pending review
+    Pending,
+    /// Claim has been approved and will be paid out
+    Approved,
+    /// Claim has been rejected
+    Rejected,
+    /// Claim has been paid out
+    Paid,
+}
+
+/// Insurance policy for split protection
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct InsurancePolicy {
+    /// Unique identifier for this insurance policy
+    pub insurance_id: String,
+    
+    /// The split ID being insured
+    pub split_id: String,
+    
+    /// The address that purchased the insurance
+    pub policy_holder: Address,
+    
+    /// Premium amount paid for the insurance
+    pub premium: i128,
+    
+    /// Coverage amount (maximum payout)
+    pub coverage_amount: i128,
+    
+    /// Current status of the insurance
+    pub status: InsuranceStatus,
+    
+    /// Timestamp when the insurance was purchased
+    pub created_at: u64,
+    
+    /// Timestamp when the insurance expires
+    pub expires_at: u64,
+}
+
+/// Insurance claim for split protection
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct InsuranceClaim {
+    /// Unique identifier for this claim
+    pub claim_id: String,
+    
+    /// The insurance policy ID this claim is against
+    pub insurance_id: String,
+    
+    /// The address filing the claim
+    pub claimant: Address,
+    
+    /// Reason for the claim
+    pub reason: String,
+    
+    /// Amount being claimed
+    pub claim_amount: i128,
+    
+    /// Current status of the claim
+    pub status: ClaimStatus,
+    
+    /// Timestamp when the claim was filed
+    pub filed_at: u64,
+    
+    /// Optional timestamp when the claim was processed
+    pub processed_at: Option<u64>,
+    
+    /// Optional notes about the claim decision
+    pub notes: Option<String>,
 }
 
 // ============================================
@@ -334,19 +434,3 @@ pub fn create_escrow(
     }
 }
 
-#[derive(Clone)]
-pub struct Participant {
-    pub address: Address,
-    pub amount_owed: i128,
-    pub paid: bool,
-}
-
-#[derive(Clone)]
-pub struct SplitEscrow {
-    pub split_id: String,
-    pub creator: Address,
-    pub participants: Vec<Participant>,
-    pub deadline: u64,
-    pub total_amount: i128,
-    pub active: bool,
-}

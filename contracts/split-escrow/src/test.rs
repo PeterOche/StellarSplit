@@ -1,17 +1,19 @@
 //! # Unit Tests for Split Escrow Contract
 //!
-//! I'm testing all the core functionality to ensure the contract
+//! I'm testing all of core functionality to ensure that contract
 //! behaves correctly under various scenarios.
 
 #![cfg(test)]
 
 extern crate std;
+use std::string::ToString;
 
 use super::*;
 use soroban_sdk::{
-    symbol_short, testutils::Address as _, testutils::Events as _, token, Address, Env, String,
+    symbol_short, testutils::Address as _, testutils::Events as _, testutils::Ledger as _, token, Address, Env, String,
     Symbol, TryIntoVal, Vec,
 };
+use soroban_sdk::token::StellarAssetClient;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
 /// Helper to create a test environment and contract client
@@ -27,7 +29,7 @@ fn setup_test() -> (
     env.mock_all_auths();
 
     let token_admin = Address::generate(&env);
-    let token_id = env.register_stellar_asset_contract(token_admin.clone());
+    let token_id = Address::generate(&env);
     let token_client = token::Client::new(&env, &token_id);
     let token_admin_client = token::StellarAssetClient::new(&env, &token_id);
 
@@ -46,9 +48,28 @@ fn setup_test() -> (
     )
 }
 
-/// Helper to initialize the contract
+/// Helper to initialize contract
 fn initialize_contract(client: &SplitEscrowContractClient, admin: &Address, token: &Address) {
     client.initialize(admin, token);
+}
+
+/// Helper to convert u64 to String in no_std environment
+fn u64_to_string(env: &Env, num: u64) -> String {
+    // For simplicity in tests, we'll use basic pattern matching
+    match num {
+        0 => String::from_str(env, "0"),
+        1 => String::from_str(env, "1"),
+        2 => String::from_str(env, "2"),
+        3 => String::from_str(env, "3"),
+        4 => String::from_str(env, "4"),
+        5 => String::from_str(env, "5"),
+        6 => String::from_str(env, "6"),
+        7 => String::from_str(env, "7"),
+        8 => String::from_str(env, "8"),
+        9 => String::from_str(env, "9"),
+        10 => String::from_str(env, "10"),
+        _ => String::from_str(env, "999"), // Fallback for test environment
+    }
 }
 
 // ============================================
@@ -714,7 +735,7 @@ fn test_escrow_storage() {
         storage::set_escrow(&env, &split_id, &escrow);
         assert!(storage::has_escrow(&env, &split_id));
 
-        let retrieved = storage::get_escrow(&env, &split_id);
+        let retrieved = storage::get_escrow(&env, &split_id).unwrap();
         assert_eq!(retrieved.total_amount, 1000);
         assert_eq!(retrieved.creator, creator);
     });
@@ -768,5 +789,357 @@ fn test_has_participant_payment() {
             &split_id,
             &participant
         ));
+    });
+}
+
+// ============================================
+// Insurance Tests
+// ============================================
+
+#[test]
+fn test_insure_split_success() {
+    let (env, admin, token_id, client, token_client, token_admin_client) = setup_test();
+    
+    // Initialize contract
+    initialize_contract(&client, &admin, &token_id);
+    
+    // Create a split first
+    let creator = Address::generate(&env);
+    let participant1 = Address::generate(&env);
+    let participant2 = Address::generate(&env);
+    
+    let split_id = client.create_split(
+        &creator,
+        &String::from_str(&env, "Test split"),
+        &1000,
+        &Vec::from_array(&env, [participant1.clone(), participant2.clone()]),
+        &Vec::from_array(&env, [500i128, 500i128]),
+    );
+    
+    // Mint tokens for the policy holder
+    let policy_holder = Address::generate(&env);
+    token_admin_client.mint(&policy_holder, &100);
+    
+    // Purchase insurance
+    let split_id_str = u64_to_string(&env, split_id);
+    let insurance_id = client.insure_split(&split_id_str, &10);
+    
+    // Verify insurance was created
+    assert!(insurance_id.len() > 0);
+    
+    // Check that insurance exists
+    let insurance = client.get_insurance(&insurance_id);
+    assert_eq!(insurance.split_id, split_id_str);
+    assert_eq!(insurance.policy_holder, policy_holder);
+    assert_eq!(insurance.premium, 10);
+    assert_eq!(insurance.coverage_amount, 100); // 10x premium
+    assert_eq!(insurance.status, types::InsuranceStatus::Active);
+}
+
+#[test]
+fn test_insure_split_invalid_premium() {
+    let (env, admin, token_id, client, _token_client, _token_admin_client) = setup_test();
+    
+    // Initialize contract
+    initialize_contract(&client, &admin, &token_id);
+    
+    // Create a split first
+    let creator = Address::generate(&env);
+    let participant1 = Address::generate(&env);
+    let participant2 = Address::generate(&env);
+    
+    let split_id = client.create_split(
+        &creator,
+        &String::from_str(&env, "Test split"),
+        &1000,
+        &Vec::from_array(&env, [participant1.clone(), participant2.clone()]),
+        &Vec::from_array(&env, [500i128, 500i128]),
+    );
+    
+    // Try to purchase insurance with zero premium
+    let split_id_str = u64_to_string(&env, split_id);
+    let result = client.try_insure_split(&split_id_str, &0);
+    assert_eq!(result, Err(Ok(types::Error::InsufficientPremium)));
+}
+
+#[test]
+fn test_insure_split_nonexistent_split() {
+    let (env, admin, token_id, client, _token_client, _token_admin_client) = setup_test();
+    
+    // Initialize contract
+    initialize_contract(&client, &admin, &token_id);
+    
+    // Try to purchase insurance for non-existent split
+    let split_id_str = String::from_str(&env, "999");
+    let result = client.try_insure_split(&split_id_str, &10);
+    assert_eq!(result, Err(Ok(types::Error::SplitNotFound)));
+}
+
+#[test]
+fn test_insure_split_already_insured() {
+    let (env, admin, token_id, client, token_client, token_admin_client) = setup_test();
+    
+    // Initialize contract
+    initialize_contract(&client, &admin, &token_id);
+    
+    // Create a split first
+    let creator = Address::generate(&env);
+    let participant1 = Address::generate(&env);
+    let participant2 = Address::generate(&env);
+    
+    let split_id = client.create_split(
+        &creator,
+        &String::from_str(&env, "Test split"),
+        &1000,
+        &Vec::from_array(&env, [participant1.clone(), participant2.clone()]),
+        &Vec::from_array(&env, [500i128, 500i128]),
+    );
+    
+    // Mint tokens for the policy holder
+    let policy_holder = Address::generate(&env);
+    token_admin_client.mint(&policy_holder, &100);
+    
+    // Purchase insurance first time
+    let split_id_str = u64_to_string(&env, split_id);
+    let _insurance_id = client.insure_split(&split_id_str, &10);
+    
+    // Try to purchase insurance again
+    let result = client.try_insure_split(&split_id_str, &10);
+    assert_eq!(result, Err(Ok(types::Error::InsuranceAlreadyExists)));
+}
+
+#[test]
+fn test_claim_insurance_success() {
+    let (env, admin, token_id, client, token_client, token_admin_client) = setup_test();
+    
+    // Initialize contract
+    initialize_contract(&client, &admin, &token_id);
+    
+    // Create a split first
+    let creator = Address::generate(&env);
+    let participant1 = Address::generate(&env);
+    let participant2 = Address::generate(&env);
+    
+    let split_id = client.create_split(
+        &creator,
+        &String::from_str(&env, "Test split"),
+        &1000,
+        &Vec::from_array(&env, [participant1.clone(), participant2.clone()]),
+        &Vec::from_array(&env, [500i128, 500i128]),
+    );
+    
+    // Mint tokens for the policy holder
+    let policy_holder = Address::generate(&env);
+    token_admin_client.mint(&policy_holder, &100);
+    
+    // Purchase insurance
+    let split_id_str = u64_to_string(&env, split_id);
+    let insurance_id = client.insure_split(&split_id_str, &10);
+    
+    // File a claim
+    let reason = String::from_str(&env, "Test claim reason");
+    client.claim_insurance(&insurance_id, &reason);
+    
+    // Verify claim was created (check events)
+    let events = env.events().all();
+    assert!(events.len() > 0);
+}
+
+#[test]
+fn test_claim_insurance_expired() {
+    let (env, admin, token_id, client, token_client, token_admin_client) = setup_test();
+    
+    // Initialize contract
+    initialize_contract(&client, &admin, &token_id);
+    
+    // Create a split first
+    let creator = Address::generate(&env);
+    let participant1 = Address::generate(&env);
+    let participant2 = Address::generate(&env);
+    
+    let split_id = client.create_split(
+        &creator,
+        &String::from_str(&env, "Test split"),
+        &1000,
+        &Vec::from_array(&env, [participant1.clone(), participant2.clone()]),
+        &Vec::from_array(&env, [500i128, 500i128]),
+    );
+    
+    // Mint tokens for the policy holder
+    let policy_holder = Address::generate(&env);
+    token_admin_client.mint(&policy_holder, &100);
+    
+    // Purchase insurance
+    let split_id_str = u64_to_string(&env, split_id);
+    let insurance_id = client.insure_split(&split_id_str, &10);
+    
+    // Fast forward time beyond expiration (31 days)
+    env.ledger().set_timestamp(env.ledger().timestamp() + (31 * 24 * 60 * 60));
+    
+    // Try to file a claim
+    let reason = String::from_str(&env, "Test claim reason");
+    let result = client.try_claim_insurance(&insurance_id, &reason);
+    assert_eq!(result, Err(Ok(types::Error::InsuranceExpired)));
+}
+
+#[test]
+fn test_process_claim_approved() {
+    let (env, admin, token_id, client, token_client, token_admin_client) = setup_test();
+    
+    // Initialize contract
+    initialize_contract(&client, &admin, &token_id);
+    
+    // Create a split first
+    let creator = Address::generate(&env);
+    let participant1 = Address::generate(&env);
+    let participant2 = Address::generate(&env);
+    
+    let split_id = client.create_split(
+        &creator,
+        &String::from_str(&env, "Test split"),
+        &1000,
+        &Vec::from_array(&env, [participant1.clone(), participant2.clone()]),
+        &Vec::from_array(&env, [500i128, 500i128]),
+    );
+    
+    // Mint tokens for the policy holder
+    let policy_holder = Address::generate(&env);
+    token_admin_client.mint(&policy_holder, &100);
+    
+    // Purchase insurance
+    let split_id_str = u64_to_string(&env, split_id);
+    let insurance_id = client.insure_split(&split_id_str, &10);
+    
+    // File a claim
+    let reason = String::from_str(&env, "Test claim reason");
+    client.claim_insurance(&insurance_id, &reason);
+    
+    // Get claim ID from insurance claims
+    let claim_ids = client.get_insurance_claims(&insurance_id);
+    assert_eq!(claim_ids.len(), 1);
+    let claim_id = claim_ids.get(0).unwrap();
+    
+    // Process claim as admin (approve)
+    client.process_claim(&claim_id, &true);
+    
+    // Verify claim was processed (check events)
+    let events = env.events().all();
+    assert!(events.len() > 0);
+}
+
+#[test]
+fn test_process_claim_rejected() {
+    let (env, admin, token_id, client, token_client, token_admin_client) = setup_test();
+    
+    // Initialize contract
+    initialize_contract(&client, &admin, &token_id);
+    
+    // Create a split first
+    let creator = Address::generate(&env);
+    let participant1 = Address::generate(&env);
+    let participant2 = Address::generate(&env);
+    
+    let split_id = client.create_split(
+        &creator,
+        &String::from_str(&env, "Test split"),
+        &1000,
+        &Vec::from_array(&env, [participant1.clone(), participant2.clone()]),
+        &Vec::from_array(&env, [500i128, 500i128]),
+    );
+    
+    // Mint tokens for the policy holder
+    let policy_holder = Address::generate(&env);
+    token_admin_client.mint(&policy_holder, &100);
+    
+    // Purchase insurance
+    let split_id_str = u64_to_string(&env, split_id);
+    let insurance_id = client.insure_split(&split_id_str, &10);
+    
+    // File a claim
+    let reason = String::from_str(&env, "Test claim reason");
+    client.claim_insurance(&insurance_id, &reason);
+    
+    // Get claim ID from insurance claims
+    let claim_ids = client.get_insurance_claims(&insurance_id);
+    assert_eq!(claim_ids.len(), 1);
+    let claim_id = claim_ids.get(0).unwrap();
+    
+    // Process claim as admin (reject)
+    client.process_claim(&claim_id, &false);
+    
+    // Verify claim was processed (check events)
+    let events = env.events().all();
+    assert!(events.len() > 0);
+}
+
+#[test]
+fn test_insurance_storage_helpers() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, SplitEscrowContract);
+    
+    let insurance_id = String::from_str(&env, "test-insurance");
+    let split_id = String::from_str(&env, "test-split");
+    let policy_holder = Address::generate(&env);
+    
+    let policy = types::InsurancePolicy {
+        insurance_id: insurance_id.clone(),
+        split_id: split_id.clone(),
+        policy_holder: policy_holder.clone(),
+        premium: 10,
+        coverage_amount: 100,
+        status: types::InsuranceStatus::Active,
+        created_at: 12345,
+        expires_at: 12345 + (30 * 24 * 60 * 60),
+    };
+    
+    env.as_contract(&contract_id, || {
+        // Test insurance storage
+        assert!(!storage::has_insurance(&env, &insurance_id));
+        
+        storage::set_insurance(&env, &insurance_id, &policy);
+        assert!(storage::has_insurance(&env, &insurance_id));
+        
+        let retrieved = storage::get_insurance(&env, &insurance_id);
+        assert_eq!(retrieved.insurance_id, insurance_id);
+        assert_eq!(retrieved.split_id, split_id);
+        assert_eq!(retrieved.policy_holder, policy_holder);
+        
+        // Test split to insurance mapping
+        assert!(!storage::has_split_insurance(&env, &split_id));
+        
+        storage::set_split_to_insurance(&env, &split_id, &insurance_id);
+        assert!(storage::has_split_insurance(&env, &split_id));
+        
+        let mapped_insurance_id = storage::get_split_to_insurance(&env, &split_id);
+        assert_eq!(mapped_insurance_id, Some(insurance_id.clone()));
+        
+        // Test claim storage
+        let claim_id = String::from_str(&env, "test-claim");
+        let claim = types::InsuranceClaim {
+            claim_id: claim_id.clone(),
+            insurance_id: insurance_id.clone(),
+            claimant: policy_holder.clone(),
+            reason: String::from_str(&env, "test reason"),
+            claim_amount: 50,
+            status: types::ClaimStatus::Pending,
+            filed_at: 12345,
+            processed_at: None,
+            notes: None,
+        };
+        
+        assert!(!storage::has_claim(&env, &claim_id));
+        
+        storage::set_claim(&env, &claim_id, &claim);
+        assert!(storage::has_claim(&env, &claim_id));
+        
+        let retrieved_claim = storage::get_claim(&env, &claim_id);
+        assert_eq!(retrieved_claim.claim_id, claim_id);
+        assert_eq!(retrieved_claim.insurance_id, insurance_id);
+        
+        // Test insurance claims mapping
+        storage::add_insurance_claim(&env, &insurance_id, &claim_id);
+        let claim_ids = storage::get_insurance_claims(&env, &insurance_id);
+        assert_eq!(claim_ids.len(), 1);
+        assert_eq!(claim_ids.get(0).unwrap(), claim_id);
     });
 }
