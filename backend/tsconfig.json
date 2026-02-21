@@ -22,5 +22,5 @@
     "types": ["jest"]
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "backend/dist"]
+  "exclude": ["node_modules", "backend/dist", "src/export"]
 }
