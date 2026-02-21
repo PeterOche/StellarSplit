@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { VitePWA, type VitePWAOptions } from "vite-plugin-pwa";
+import path from "path";
 
 const pwaOptions: Partial<VitePWAOptions> = {
   registerType: "autoUpdate",
@@ -50,5 +51,12 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: './src/test/setup.ts',
+  },
+  resolve: {
+    alias: {
+      "@src": path.resolve(__dirname, "./src"),
+      "@components": path.resolve(__dirname, "./src/components"),
+      "@utils": path.resolve(__dirname, "./src/utils"),
+    },
   },
 });
