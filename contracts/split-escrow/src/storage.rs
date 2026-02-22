@@ -523,19 +523,87 @@ pub fn get_next_activity_id(env: &Env) -> u64 {
     id
 }
 
-/// Get all activities for a user (limited to recent ones for efficiency)
-pub fn get_user_activities(env: &Env, user: &Address, limit: u32) -> Vec<UserActivity> {
-    let mut activities = Vec::new(env);
-    let counter = get_next_activity_id(env);
+/// Storage keys for oracle system
+#[derive(Clone)]
+#[contracttype]
+pub enum OracleStorageKey {
+    VerificationRequest(String),
+    OracleConfig,
+    VerificationCounter,
+}
+
+/// Get verification request
+pub fn get_verification_request(env: &Env, verification_id: &String) -> Option<VerificationRequest> {
+    let key = OracleStorageKey::VerificationRequest(verification_id.clone());
+    env.storage().persistent().get(&key)
+}
+
+/// Set verification request
+pub fn set_verification_request(env: &Env, verification_id: &String, request: &VerificationRequest) {
+    let key = OracleStorageKey::VerificationRequest(verification_id.clone());
+    env.storage().persistent().set(&key, request);
+}
+
+/// Check if verification request exists
+pub fn has_verification_request(env: &Env, verification_id: &String) -> bool {
+    let key = OracleStorageKey::VerificationRequest(verification_id.clone());
+    env.storage().persistent().has(&key)
+}
+
+/// Get oracle configuration
+pub fn get_oracle_config(env: &Env) -> Option<OracleConfig> {
+    let key = OracleStorageKey::OracleConfig;
+    env.storage().persistent().get(&key)
+}
+
+/// Set oracle configuration
+pub fn set_oracle_config(env: &Env, config: &OracleConfig) {
+    let key = OracleStorageKey::OracleConfig;
+    env.storage().persistent().set(&key, config);
+}
+
+/// Get next verification ID
+pub fn get_next_verification_id(env: &Env) -> String {
+    let key = OracleStorageKey::VerificationCounter;
+    let counter = env.storage().persistent().get(&key).unwrap_or(0u64);
+    env.storage().persistent().set(&key, &(counter + 1));
     
-    // Get recent activities (up to limit)
-    let start = if counter > limit as u64 { counter - limit as u64 } else { 0 };
+    // Convert counter to string
+    format_number_as_string(&env, counter)
+}
+
+/// Helper to format number as string (reused from rewards)
+fn format_number_as_string(env: &Env, num: u64) -> String {
+    match num {
+        0 => String::from_str(env, "0"),
+        1 => String::from_str(env, "1"),
+        2 => String::from_str(env, "2"),
+        3 => String::from_str(env, "3"),
+        4 => String::from_str(env, "4"),
+        5 => String::from_str(env, "5"),
+        6 => String::from_str(env, "6"),
+        7 => String::from_str(env, "7"),
+        8 => String::from_str(env, "8"),
+        9 => String::from_str(env, "9"),
+        10 => String::from_str(env, "10"),
+        _ => String::from_str(env, "999"),
+    }
+}
+
+/// Get all verification requests for a split
+pub fn get_split_verifications(env: &Env, split_id: &String) -> Vec<String> {
+    let mut verification_ids = Vec::new(env);
+    let counter = get_next_verification_id(env);
     
-    for i in start..counter {
-        if let Some(activity) = get_user_activity(env, user, i) {
-            activities.push_back(activity);
+    // Search through all verification IDs
+    for i in 0..counter {
+        let id_str = format_number_as_string(env, i);
+        if let Some(request) = get_verification_request(env, &id_str) {
+            if request.split_id == *split_id {
+                verification_ids.push_back(id_str);
+            }
         }
     }
     
-    activities
+    verification_ids
 }

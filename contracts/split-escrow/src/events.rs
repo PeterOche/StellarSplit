@@ -190,14 +190,36 @@ pub fn emit_rewards_claimed(env: &Env, user: &Address, amount_claimed: i128) {
         );
 }
 
-/// Emit when user rewards status changes
+/// Emit when verification is submitted for a split
 ///
-/// This event tracks changes in user rewards eligibility.
-pub fn emit_rewards_status_changed(env: &Env, user: &Address, old_status: &str, new_status: &str) {
+/// This event is emitted when someone submits evidence for split verification.
+pub fn emit_verification_submitted(env: &Env, verification_id: &String, split_id: &String, requester: &Address) {
     env.events()
         .publish(
-            (symbol_short!("rewards_status_changed"),),
-            (user.clone(), old_status, new_status)
+            (symbol_short!("verification_submitted"),),
+            (verification_id.clone(), split_id.clone(), requester.clone())
+        );
+}
+
+/// Emit when verification is completed
+///
+/// This event is emitted when an oracle processes a verification request.
+pub fn emit_verification_completed(env: &Env, verification_id: &String, verified: bool, verifier: &Address) {
+    env.events()
+        .publish(
+            (symbol_short!("verification_completed"),),
+            (verification_id.clone(), verified, verifier.clone())
+        );
+}
+
+/// Emit when verification status changes
+///
+/// This event tracks status changes in verification requests.
+pub fn emit_verification_status_changed(env: &Env, verification_id: &String, old_status: &str, new_status: &str) {
+    env.events()
+        .publish(
+            (symbol_short!("verification_status_changed"),),
+            (verification_id.clone(), old_status, new_status)
         );
 }
 

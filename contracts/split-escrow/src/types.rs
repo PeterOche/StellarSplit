@@ -131,6 +131,42 @@ pub enum ActivityType {
     SplitCompleted = 3,
 }
 
+/// Verification status for split legitimacy
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[contracttype]
+pub enum VerificationStatus {
+    Pending = 0,
+    Verified = 1,
+    Rejected = 2,
+    Expired = 3,
+}
+
+/// Verification request for split legitimacy
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct VerificationRequest {
+    pub verification_id: String,
+    pub split_id: String,
+    pub requester: Address,
+    pub receipt_hash: String,
+    pub evidence_url: Option<String>,
+    pub submitted_at: u64,
+    pub status: VerificationStatus,
+    pub verified_by: Option<Address>,
+    pub verified_at: Option<u64>,
+    pub rejection_reason: Option<String>,
+}
+
+/// Oracle configuration and settings
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct OracleConfig {
+    pub required_verifications: u32,
+    pub verification_timeout: u64,
+    pub min_oracles: u32,
+    pub oracle_addresses: Vec<Address>,
+}
+
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 #[repr(u32)]
 pub enum Error {
@@ -151,6 +187,11 @@ pub enum Error {
     UserNotFound = 15,
     InsufficientRewards = 16,
     RewardsAlreadyClaimed = 17,
+    VerificationNotFound = 18,
+    VerificationAlreadyExists = 19,
+    InvalidVerificationStatus = 20,
+    OracleNotAuthorized = 21,
+    InsufficientOracles = 22,
 }
 
 /// Configuration for the contract

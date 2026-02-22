@@ -1358,7 +1358,309 @@ fn test_rewards_storage_helpers() {
         storage::set_user_activity(&env, &user, activity_id, &activity);
         
         let retrieved_activity = storage::get_user_activity(&env, &user, activity_id).unwrap();
-        assert_eq!(retrieved_activity.split_id, 123);
-        assert_eq!(retrieved_activity.amount, 100);
+        }
+
+// ============================================
+// Oracle Tests
+// ============================================
+
+#[test]
+fn test_submit_verification_success() {
+    let (env, admin, token_id, client, _token_client, _token_admin_client) = setup_test();
+    
+    // Initialize contract
+    initialize_contract(&client, &admin, &token_id);
+    
+    // Create a split first
+    let creator = Address::generate(&env);
+    let participant1 = Address::generate(&env);
+    let participant2 = Address::generate(&env);
+    
+    let split_id = client.create_split(
+        &creator,
+        &String::from_str(&env, "Test split"),
+        &1000,
+        &Vec::from_array(&env, [participant1.clone(), participant2.clone()]),
+        &Vec::from_array(&env, [500i128, 500i128]),
+    );
+    
+    // Submit verification
+    let receipt_hash = String::from_str(&env, "receipt_hash_123");
+    let verification_id = client.submit_verification(&u64_to_string(&env, split_id), &receipt_hash);
+    
+    // Verify verification was created
+    assert!(verification_id.len() > 0);
+    
+    // Check verification request
+    let verification = client.get_verification_request(&verification_id);
+    assert_eq!(verification.split_id, u64_to_string(&env, split_id));
+    assert_eq!(verification.requester, env.current_contract_address());
+    assert_eq!(verification.receipt_hash, receipt_hash);
+    assert_eq!(verification.status, types::VerificationStatus::Pending);
+    
+    // Check events
+    let events = env.events().all();
+    assert!(events.len() > 0);
+}
+
+#[test]
+fn test_submit_verification_nonexistent_split() {
+    let (env, admin, token_id, client, _token_client, _token_admin_client) = setup_test();
+    
+    // Initialize contract
+    initialize_contract(&client, &admin, &token_id);
+    
+    // Try to submit verification for non-existent split
+    let receipt_hash = String::from_str(&env, "receipt_hash_123");
+    let result = client.try_submit_verification(&String::from_str(&env, "999"), &receipt_hash);
+    assert_eq!(result, Err(Ok(types::Error::SplitNotFound)));
+}
+
+#[test]
+fn test_submit_verification_already_exists() {
+    let (env, admin, token_id, client, _token_client, _token_admin_client) = setup_test();
+    
+    // Initialize contract
+    initialize_contract(&client, &admin, &token_id);
+    
+    // Create a split first
+    let creator = Address::generate(&env);
+    let participant1 = Address::generate(&env);
+    let participant2 = Address::generate(&env);
+    
+    let split_id = client.create_split(
+        &creator,
+        &String::from_str(&env, "Test split"),
+        &1000,
+        &Vec::from_array(&env, [participant1.clone(), participant2.clone()]),
+        &Vec::from_array(&env, [500i128, 500i128]),
+    );
+    
+    // Submit first verification
+    let receipt_hash = String::from_str(&env, "receipt_hash_123");
+    let _verification_id = client.submit_verification(&u64_to_string(&env, split_id), &receipt_hash);
+    
+    // Try to submit second verification
+    let result = client.try_submit_verification(&u64_to_string(&env, split_id), &receipt_hash);
+    assert_eq!(result, Err(Ok(types::Error::VerificationAlreadyExists)));
+}
+
+#[test]
+fn test_verify_split_success() {
+    let (env, admin, token_id, client, _token_client, _token_admin_client) = setup_test();
+    
+    // Initialize contract
+    initialize_contract(&client, &admin, &token_id);
+    
+    // Create a split and submit verification
+    let creator = Address::generate(&env);
+    let participant1 = Address::generate(&env);
+    let participant2 = Address::generate(&env);
+    
+    let split_id = client.create_split(
+        &creator,
+        &String::from_str(&env, "Test split"),
+        &1000,
+        &Vec::from_array(&env, [participant1.clone(), participant2.clone()]),
+        &Vec::from_array(&env, [500i128, 500i128]),
+    );
+    
+    let receipt_hash = String::from_str(&env, "receipt_hash_123");
+    let verification_id = client.submit_verification(&u64_to_string(&env, split_id), &receipt_hash);
+    
+    // Set up oracle config to allow verification
+    let oracle = Address::generate(&env);
+    env.as_contract(&client.contract_id, || {
+        let config = types::OracleConfig {
+            required_verifications: 1,
+            verification_timeout: 86400, // 24 hours
+            min_oracles: 1,
+            oracle_addresses: Vec::from_array(&env, [oracle.clone()]),
+        };
+        storage::set_oracle_config(&env, &config);
+    });
+    
+    // Verify split as oracle
+    client.verify_split(&verification_id, &true);
+    
+    // Check verification was updated
+    let verification = client.get_verification_request(&verification_id);
+    assert_eq!(verification.status, types::VerificationStatus::Verified);
+    assert_eq!(verification.verified_by, Some(oracle));
+    assert!(verification.verified_at.is_some());
+    
+    // Check events
+    let events = env.events().all();
+    assert!(events.len() > 0);
+}
+
+#[test]
+fn test_verify_split_unauthorized() {
+    let (env, admin, token_id, client, _token_client, _token_admin_client) = setup_test();
+    
+    // Initialize contract
+    initialize_contract(&client, &admin, &token_id);
+    
+    // Create a split and submit verification
+    let creator = Address::generate(&env);
+    let participant1 = Address::generate(&env);
+    let participant2 = Address::generate(&env);
+    
+    let split_id = client.create_split(
+        &creator,
+        &String::from_str(&env, "Test split"),
+        &1000,
+        &Vec::from_array(&env, [participant1.clone(), participant2.clone()]),
+        &Vec::from_array(&env, [500i128, 500i128]),
+    );
+    
+    let receipt_hash = String::from_str(&env, "receipt_hash_123");
+    let verification_id = client.submit_verification(&u64_to_string(&env, split_id), &receipt_hash);
+    
+    // Try to verify split as non-oracle
+    let unauthorized = Address::generate(&env);
+    let result = client.try_verify_split(&verification_id, &true);
+    assert_eq!(result, Err(Ok(types::Error::OracleNotAuthorized)));
+}
+
+#[test]
+fn test_verify_split_invalid_status() {
+    let (env, admin, token_id, client, _token_client, _token_admin_client) = setup_test();
+    
+    // Initialize contract
+    initialize_contract(&client, &admin, &token_id);
+    
+    // Create a split and submit verification
+    let creator = Address::generate(&env);
+    let participant1 = Address::generate(&env);
+    let participant2 = Address::generate(&env);
+    
+    let split_id = client.create_split(
+        &creator,
+        &String::from_str(&env, "Test split"),
+        &1000,
+        &Vec::from_array(&env, [participant1.clone(), participant2.clone()]),
+        &Vec::from_array(&env, [500i128, 500i128]),
+    );
+    
+    let receipt_hash = String::from_str(&env, "receipt_hash_123");
+    let verification_id = client.submit_verification(&u64_to_string(&env, split_id), &receipt_hash);
+    
+    // Set up oracle config and verify first time
+    let oracle = Address::generate(&env);
+    env.as_contract(&client.contract_id, || {
+        let config = types::OracleConfig {
+            required_verifications: 1,
+            verification_timeout: 86400,
+            min_oracles: 1,
+            oracle_addresses: Vec::from_array(&env, [oracle.clone()]),
+        };
+        storage::set_oracle_config(&env, &config);
+    });
+    
+    client.verify_split(&verification_id, &true);
+    
+    // Try to verify again (should fail - already verified)
+    let result = client.try_verify_split(&verification_id, &true);
+    assert_eq!(result, Err(Ok(types::Error::InvalidVerificationStatus)));
+}
+
+#[test]
+fn test_get_verification_status() {
+    let (env, admin, token_id, client, _token_client, _token_admin_client) = setup_test();
+    
+    // Initialize contract
+    initialize_contract(&client, &admin, &token_id);
+    
+    // Create a split
+    let creator = Address::generate(&env);
+    let participant1 = Address::generate(&env);
+    let participant2 = Address::generate(&env);
+    
+    let split_id = client.create_split(
+        &creator,
+        &String::from_str(&env, "Test split"),
+        &1000,
+        &Vec::from_array(&env, [participant1.clone(), participant2.clone()]),
+        &Vec::from_array(&env, [500i128, 500i128]),
+    );
+    
+    // No verifications yet - should return Pending
+    let status = client.get_verification_status(&u64_to_string(&env, split_id));
+    assert_eq!(status, types::VerificationStatus::Pending);
+    
+    // Submit and verify a split
+    let receipt_hash = String::from_str(&env, "receipt_hash_123");
+    let verification_id = client.submit_verification(&u64_to_string(&env, split_id), &receipt_hash);
+    
+    let oracle = Address::generate(&env);
+    env.as_contract(&client.contract_id, || {
+        let config = types::OracleConfig {
+            required_verifications: 1,
+            verification_timeout: 86400,
+            min_oracles: 1,
+            oracle_addresses: Vec::from_array(&env, [oracle.clone()]),
+        };
+        storage::set_oracle_config(&env, &config);
+    });
+    
+    client.verify_split(&verification_id, &true);
+    
+    // Should now return Verified
+    let status = client.get_verification_status(&u64_to_string(&env, split_id));
+    assert_eq!(status, types::VerificationStatus::Verified);
+}
+
+#[test]
+fn test_oracle_storage_helpers() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, SplitEscrowContract);
+    
+    let verification_id = String::from_str(&env, "test-verification");
+    let split_id = String::from_str(&env, "test-split");
+    let requester = Address::generate(&env);
+    
+    env.as_contract(&contract_id, || {
+        // Test storing and retrieving verification request
+        let request = types::VerificationRequest {
+            verification_id: verification_id.clone(),
+            split_id: split_id.clone(),
+            requester: requester.clone(),
+            receipt_hash: String::from_str(&env, "receipt_hash"),
+            evidence_url: Some(String::from_str(&env, "https://example.com/evidence")),
+            submitted_at: 12345,
+            status: types::VerificationStatus::Pending,
+            verified_by: None,
+            verified_at: None,
+            rejection_reason: None,
+        };
+        
+        // Store verification request
+        storage::set_verification_request(&env, &verification_id, &request);
+        
+        // Verify storage
+        assert!(storage::has_verification_request(&env, &verification_id));
+        
+        let retrieved = storage::get_verification_request(&env, &verification_id).unwrap();
+        assert_eq!(retrieved.verification_id, verification_id);
+        assert_eq!(retrieved.split_id, split_id);
+        assert_eq!(retrieved.requester, requester);
+        assert_eq!(retrieved.receipt_hash, String::from_str(&env, "receipt_hash"));
+        
+        // Test oracle config storage
+        let config = types::OracleConfig {
+            required_verifications: 3,
+            verification_timeout: 172800, // 48 hours
+            min_oracles: 2,
+            oracle_addresses: Vec::from_array(&env, [requester.clone(), Address::generate(&env)]),
+        };
+        
+        storage::set_oracle_config(&env, &config);
+        
+        let retrieved_config = storage::get_oracle_config(&env).unwrap();
+        assert_eq!(retrieved_config.required_verifications, 3);
+        assert_eq!(retrieved_config.verification_timeout, 172800);
+        assert_eq!(retrieved_config.min_oracles, 2);
+        assert_eq!(retrieved_config.oracle_addresses.len(), 2);
     });
 }

@@ -478,14 +478,161 @@ impl SplitEscrowContract {
         Ok(available_rewards)
     }
 
-    /// Get user rewards information
+    /// Submit verification for a split
     ///
-    /// This function returns the current rewards status for a user.
-    pub fn get_user_rewards_info(
+    /// This function allows users to submit verification requests with evidence.
+    pub fn submit_verification(
         env: Env,
-        user: Address,
-    ) -> Result<types::UserRewards, Error> {
-        storage::get_user_rewards(&env, &user)
-            .ok_or(Error::UserNotFound)
+        split_id: String,
+        receipt_hash: String,
+    ) -> Result<String, Error> {
+        // Get caller's address (require_auth for the caller)
+        let caller = env.current_contract_address();
+        caller.require_auth();
+
+        // Check if split exists
+        let split_id_num = {
+            let mut result = 0u64;
+            let chars = split_id.clone();
+            for i in 0..chars.len() {
+                let char_val = chars.get(i).unwrap();
+                match char_val {
+                    '0' => result = result * 10 + 0,
+                    '1' => result = result * 10 + 1,
+                    '2' => result = result * 10 + 2,
+                    '3' => result = result * 10 + 3,
+                    '4' => result = result * 10 + 4,
+                    '5' => result = result * 10 + 5,
+                    '6' => result = result * 10 + 6,
+                    '7' => result = result * 10 + 7,
+                    '8' => result = result * 10 + 8,
+                    '9' => result = result * 10 + 9,
+                    _ => {} // Skip non-digit characters
+                }
+            }
+            result
+        };
+
+        if !storage::has_split(&env, split_id_num) {
+            return Err(Error::SplitNotFound);
+        }
+
+        // Check if verification already exists
+        if storage::has_verification_request(&env, &split_id) {
+            return Err(Error::VerificationAlreadyExists);
+        }
+
+        // Generate verification ID
+        let verification_id = storage::get_next_verification_id(&env);
+
+        // Create verification request
+        let request = types::VerificationRequest {
+            verification_id: verification_id.clone(),
+            split_id: split_id.clone(),
+            requester: caller,
+            receipt_hash: receipt_hash.clone(),
+            evidence_url: None,
+            submitted_at: env.ledger().timestamp(),
+            status: types::VerificationStatus::Pending,
+            verified_by: None,
+            verified_at: None,
+            rejection_reason: None,
+        };
+
+        // Store verification request
+        storage::set_verification_request(&env, &verification_id, &request);
+
+        // Emit verification submitted event
+        events::emit_verification_submitted(&env, &verification_id, &split_id, &caller);
+
+        Ok(verification_id)
+    }
+
+    /// Verify a split
+    ///
+    /// This function allows authorized oracles to verify split legitimacy.
+    pub fn verify_split(
+        env: Env,
+        verification_id: String,
+        verified: bool,
+    ) -> Result<(), Error> {
+        // Get caller's address (require_auth for the caller)
+        let caller = env.current_contract_address();
+        caller.require_auth();
+
+        // Get verification request
+        let mut request = storage::get_verification_request(&env, &verification_id)
+            .ok_or(Error::VerificationNotFound)?;
+
+        // Check if caller is authorized oracle
+        let oracle_config = storage::get_oracle_config(&env)
+            .ok_or(Error::OracleNotAuthorized)?;
+        
+        if !oracle_config.oracle_addresses.contains(&caller) {
+            return Err(Error::OracleNotAuthorized);
+        }
+
+        // Check if verification is still pending
+        if request.status != types::VerificationStatus::Pending {
+            return Err(Error::InvalidVerificationStatus);
+        }
+
+        // Update verification request
+        request.status = if verified {
+            types::VerificationStatus::Verified
+        } else {
+            types::VerificationStatus::Rejected
+        };
+        request.verified_by = Some(caller);
+        request.verified_at = Some(env.ledger().timestamp());
+
+        if !verified {
+            request.rejection_reason = Some(String::from_str(&env, "Evidence insufficient"));
+        }
+
+        // Store updated request
+        storage::set_verification_request(&env, &verification_id, &request);
+
+        // Emit verification completed event
+        events::emit_verification_completed(&env, &verification_id, verified, &caller);
+
+        Ok(())
+    }
+
+    /// Get verification status for a split
+    ///
+    /// This function returns the current verification status of a split.
+    pub fn get_verification_status(
+        env: Env,
+        split_id: String,
+    ) -> types::VerificationStatus {
+        // Get all verification requests for this split
+        let verification_ids = storage::get_split_verifications(&env, &split_id);
+
+        // Find the most recent verification
+        let mut latest_status = types::VerificationStatus::Pending;
+        let mut latest_timestamp = 0u64;
+
+        for verification_id in verification_ids.iter() {
+            if let Some(request) = storage::get_verification_request(&env, verification_id) {
+                match request.status {
+                    types::VerificationStatus::Verified => {
+                        if request.verified_at.unwrap_or(0) > latest_timestamp {
+                            latest_timestamp = request.verified_at.unwrap();
+                            latest_status = types::VerificationStatus::Verified;
+                        }
+                    },
+                    types::VerificationStatus::Rejected => {
+                        if request.verified_at.unwrap_or(0) > latest_timestamp {
+                            latest_timestamp = request.verified_at.unwrap();
+                            latest_status = types::VerificationStatus::Rejected;
+                        }
+                    },
+                    _ => {}
+                }
+            }
+        }
+
+        latest_status
     }
 }
